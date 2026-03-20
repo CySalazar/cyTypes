@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CyTypes.Fhe</RootNamespace>
+    <AssemblyName>CyTypes.Fhe</AssemblyName>
+    <PackageId>CyTypes.Fhe</PackageId>
+    <Authors>Matteo Sala</Authors>
+    <Description>Fully Homomorphic Encryption (FHE) support for CyTypes using Microsoft SEAL — enables arithmetic on encrypted data without decryption.</Description>
+    <PackageTags>cryptography;fhe;homomorphic-encryption;seal;encrypted-types</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CyTypes.Fhe.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Research.SEALNet" />
+    <ProjectReference Include="../CyTypes.Core/CyTypes.Core.csproj" />
+  </ItemGroup>
+</Project>

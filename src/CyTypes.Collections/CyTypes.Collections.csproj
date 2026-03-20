@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CyTypes.Collections</RootNamespace>
+    <AssemblyName>CyTypes.Collections</AssemblyName>
+    <!-- CyDictionary/CyList are intentional domain names, not Framework type aliases -->
+    <NoWarn>$(NoWarn);CA1711</NoWarn>
+    <PackageId>CyTypes.Collections</PackageId>
+    <Authors>Matteo Sala</Authors>
+    <Description>Thread-safe encrypted collections for CyTypes — CyList and CyDictionary with taint propagation and policy enforcement.</Description>
+    <PackageTags>cryptography;encrypted-types;collections;thread-safe</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CyTypes.Collections.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+  </ItemGroup>
+</Project>

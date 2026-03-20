@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>CyTypes.Benchmarks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Fhe\CyTypes.Fhe.csproj" />
+  </ItemGroup>
+</Project>

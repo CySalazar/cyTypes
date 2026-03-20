@@ -1,0 +1,27 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Source code
+*.cs text diff=csharp
+*.csproj text
+*.sln text eol=crlf
+*.props text
+*.targets text
+
+# Documentation
+*.md text diff=markdown
+*.yml text
+*.yaml text
+*.json text
+
+# Binary
+*.nupkg binary
+*.snk binary
+*.pfx binary
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Git
+.gitattributes text
+.gitignore text

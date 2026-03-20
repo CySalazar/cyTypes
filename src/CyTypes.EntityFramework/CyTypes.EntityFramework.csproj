@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CyTypes.EntityFramework</RootNamespace>
+    <AssemblyName>CyTypes.EntityFramework</AssemblyName>
+    <PackageId>CyTypes.EntityFramework</PackageId>
+    <Authors>Matteo Sala</Authors>
+    <Description>Entity Framework Core value converters for CyTypes encrypted primitives — seamless persistence of always-encrypted types.</Description>
+    <PackageTags>efcore;entity-framework;value-converters;encrypted-types;cytypes</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CyTypes.EntityFramework.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+  </ItemGroup>
+</Project>

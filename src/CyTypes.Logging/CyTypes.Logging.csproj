@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CyTypes.Logging</RootNamespace>
+    <AssemblyName>CyTypes.Logging</AssemblyName>
+    <PackageId>CyTypes.Logging</PackageId>
+    <Authors>Matteo Sala</Authors>
+    <Description>Auto-redacting logging for CyTypes — ensures encrypted values never leak into log output.</Description>
+    <PackageTags>cryptography;logging;redaction;security</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CyTypes.Logging.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

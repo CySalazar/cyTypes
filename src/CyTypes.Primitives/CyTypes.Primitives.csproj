@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CyTypes.Primitives</RootNamespace>
+    <AssemblyName>CyTypes.Primitives</AssemblyName>
+    <!-- CA1716: 'Shared' conflicts with VB.NET keyword; acceptable since this is a C#-only framework -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+    <PackageId>CyTypes.Primitives</PackageId>
+    <Authors>Matteo Sala</Authors>
+    <Description>Always-encrypted primitive types (CyInt, CyString, CyBool, etc.) — AES-256-GCM encrypted values with taint tracking and auto-destroy.</Description>
+    <PackageTags>cryptography;encrypted-types;secure-primitives;aes-gcm</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CyTypes.Primitives.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CyTypes.Core\CyTypes.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>CyTypes.Examples</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Fhe\CyTypes.Fhe.csproj" />
+  </ItemGroup>
+</Project>
