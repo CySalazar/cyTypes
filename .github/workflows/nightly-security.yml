@@ -1,0 +1,43 @@
+name: Nightly Security Suite
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 2:00 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  security-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0"
+
+      - name: Restore all projects
+        run: dotnet restore cyTypes.sln
+
+      - name: Build
+        run: dotnet build cyTypes.sln --no-restore -c Release
+
+      - name: Run Security Tests
+        run: dotnet test tests/CyTypes.Security.Tests/CyTypes.Security.Tests.csproj --no-build -c Release --logger "trx;LogFileName=security-results.trx" --results-directory ./TestResults
+
+      - name: Run Soak Test (abbreviated)
+        run: dotnet test tests/CyTypes.Benchmarks.Application/CyTypes.Benchmarks.Application.csproj --no-build -c Release --filter "Category=Soak" --logger "trx;LogFileName=soak-results.trx" --results-directory ./TestResults
+        timeout-minutes: 35
+
+      - name: Vulnerability scan
+        run: dotnet list cyTypes.sln package --vulnerable --include-transitive
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: nightly-security-results
+          path: "./TestResults/**"

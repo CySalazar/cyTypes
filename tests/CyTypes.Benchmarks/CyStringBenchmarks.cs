@@ -39,7 +39,7 @@ public class CyStringBenchmarks : IDisposable
     public CyString[] Split() => _csv.Split(',');
 
     [Benchmark]
-    public static CyString Roundtrip()
+    public CyString Roundtrip()
     {
         var cy = new CyString("benchmark test string");
         _ = cy.ToInsecureString();

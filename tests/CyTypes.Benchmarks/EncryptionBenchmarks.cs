@@ -13,13 +13,17 @@ public class EncryptionBenchmarks
     private byte[] _plaintext = null!;
     private byte[] _ciphertext = null!;
 
+    [Params(16, 64, 256, 1024, 4096)]
+    public int PayloadSize { get; set; }
+
     [GlobalSetup]
     public void Setup()
     {
         _engine = new AesGcmEngine();
         _key = new byte[32];
         RandomNumberGenerator.Fill(_key);
-        _plaintext = BitConverter.GetBytes(42);
+        _plaintext = new byte[PayloadSize];
+        RandomNumberGenerator.Fill(_plaintext);
         _ciphertext = _engine.Encrypt(_plaintext, _key);
     }
 
@@ -30,5 +34,12 @@ public class EncryptionBenchmarks
     public byte[] AesGcmDecrypt() => _engine.Decrypt(_ciphertext, _key);
 
     [Benchmark]
-    public static CyInt CyIntCreate() => new CyInt(42);
+    public CyInt CyIntCreate() => new(42);
+
+    [Benchmark]
+    public byte[] HkdfDerive() =>
+        HkdfKeyDerivation.DeriveKey(_key, 32, _plaintext.AsSpan(0, Math.Min(16, _plaintext.Length)));
+
+    [Benchmark]
+    public byte[] HmacCompute() => HmacComparer.Compute(_key, _plaintext);
 }

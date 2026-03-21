@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <RootNamespace>CyTypes.Benchmarks</RootNamespace>
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

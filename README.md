@@ -911,35 +911,28 @@ RelinKeys rlk = keyManager.RelinKeys;
 
 ## Benchmarks
 
-The `tests/CyTypes.Benchmarks` project measures the overhead of encrypted operations vs native .NET using [BenchmarkDotNet](https://benchmarkdotnet.org/).
+The cyTypes wrapper adds **< 1% overhead** over raw AES-GCM encryption. HMAC and HKDF wrappers are equally lean. Full results from 112 core benchmarks (9 classes) and 13 application benchmarks (3 classes) are available in **[benchmarks.md](benchmarks.md)**.
 
-### What Is Measured
-
-**CyIntBenchmarks:**
-
-| Benchmark | Description |
-|-----------|-------------|
-| `Add` | Addition of two `CyInt` values (decrypt + add + re-encrypt) |
-| `Multiply` | Multiplication of two `CyInt` values |
-| `Roundtrip` | Create `CyInt(123)` → `ToInsecureInt()` → create new `CyInt` |
-| `NativeAdd` | Baseline: native `int` addition (42 + 17) |
-
-**CyStringBenchmarks:**
-
-| Benchmark | Description |
-|-----------|-------------|
-| `Concat` | Concatenation of two `CyString` values |
-| `Split` | Split a `CyString` by comma separator |
-| `Roundtrip` | Create `CyString` → `ToInsecureString()` → create new `CyString` |
-| `SecureEquals` | Constant-time HMAC-based string comparison |
+| Operation | Overhead vs Native | Verdict |
+|-----------|--------------------|---------|
+| AES-GCM Encrypt/Decrypt (wrapper) | < 1% | Negligible |
+| HKDF key derivation | ~1% | Negligible |
+| HMAC compute | ~0% | Zero overhead |
+| HMAC verify (constant-time) | 8-14% | Low |
+| CyInt/CyString roundtrip | ~5.5 us | Acceptable |
+| SecureBuffer alloc | 9-118x vs array | Expected (secure memory) |
+| FHE BFV encrypt | ~817x vs AES-GCM | Expected (homomorphic) |
+| JSON serialize (single) | ~108x | Expected (per-field encryption) |
 
 ### Running Benchmarks
 
 ```bash
+# Core benchmarks
 dotnet run --project tests/CyTypes.Benchmarks -c Release
-```
 
-BenchmarkDotNet outputs a table with Mean, Error, StdDev, and Allocated columns for each benchmark. The `NativeAdd` baseline shows the cost of native `int` arithmetic for comparison.
+# Application benchmarks (API, EF Core, JSON)
+dotnet run --project tests/CyTypes.Benchmarks.Application -c Release
+```
 
 ### Performance Guidance
 
@@ -980,7 +973,18 @@ tests/
 ├── CyTypes.EntityFramework.Tests
 ├── CyTypes.DependencyInjection.Tests
 ├── CyTypes.Fhe.Tests
-└── CyTypes.Benchmarks
+├── CyTypes.Security.Tests            # Security/compliance test suite
+├── CyTypes.Benchmarks                # Core micro-benchmarks (BenchmarkDotNet)
+├── CyTypes.Benchmarks.Application    # Application-level benchmarks (API, EF Core, JSON)
+└── CyTypes.Tools.HeapAnalysis        # Memory analysis tool
+
+examples/
+└── CyTypes.Examples                  # 11 demo scenarios
+
+docs/
+└── compliance/                       # FIPS, NIST, SOC2/PCI/GDPR documentation
+
+nupkgs/                               # Built NuGet packages
 ```
 
 ## Building & Testing

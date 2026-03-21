@@ -33,7 +33,7 @@ public class CyIntBenchmarks : IDisposable
     public CyInt Multiply() => _a * _b;
 
     [Benchmark]
-    public static CyInt Roundtrip()
+    public CyInt Roundtrip()
     {
         var cy = new CyInt(123);
         _ = cy.ToInsecureInt();
@@ -41,5 +41,5 @@ public class CyIntBenchmarks : IDisposable
     }
 
     [Benchmark(Baseline = true)]
-    public static int NativeAdd() => 42 + 17;
+    public int NativeAdd() => 42 + 17;
 }

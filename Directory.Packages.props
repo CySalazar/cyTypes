@@ -35,4 +35,17 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.2" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Testing.Verifiers.XUnit" Version="1.1.2" />
   </ItemGroup>
+
+  <!-- Security & analysis tools -->
+  <ItemGroup>
+    <PackageVersion Include="SharpFuzz" Version="2.1.1" />
+    <PackageVersion Include="Microsoft.Diagnostics.Runtime" Version="3.1.512801" />
+  </ItemGroup>
+
+  <!-- Application benchmark dependencies -->
+  <ItemGroup>
+    <PackageVersion Include="NBomber" Version="5.5.0" />
+    <PackageVersion Include="NBomber.Http" Version="5.1.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.0" />
+  </ItemGroup>
 </Project>
