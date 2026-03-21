@@ -2,13 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -55,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: test-results
-          path: "**/TestResults/**"
+          path: "./TestResults/**"
 
       - name: Upload coverage report
         if: always()
