@@ -15,8 +15,12 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -37,9 +41,11 @@ jobs:
         run: dotnet test cyTypes.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
       - name: Install ReportGenerator
+        if: matrix.os == 'ubuntu-latest'
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
       - name: Generate coverage report
+        if: matrix.os == 'ubuntu-latest'
         run: |
           reportgenerator \
             -reports:"./TestResults/**/coverage.cobertura.xml" \
@@ -47,6 +53,7 @@ jobs:
             -reporttypes:"HtmlInline_AzurePipelines;Cobertura;TextSummary"
 
       - name: Check coverage threshold
+        if: matrix.os == 'ubuntu-latest'
         run: |
           COVERAGE=$(grep -oP 'Line coverage: \K[0-9.]+' ./TestResults/CoverageReport/Summary.txt || echo "0")
           echo "Line coverage: ${COVERAGE}%"
@@ -59,15 +66,73 @@ jobs:
         run: dotnet list cyTypes.sln package --vulnerable --include-transitive
 
       - name: Upload test results
-        if: always()
+        if: always() && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v5
         with:
           name: test-results
           path: "./TestResults/**"
 
       - name: Upload coverage report
-        if: always()
+        if: always() && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: "./TestResults/CoverageReport"
+
+  gc-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: build-and-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0"
+
+      - name: Restore and Build
+        run: dotnet build cyTypes.sln -c Release
+
+      - name: GC Stress Test — SecureBuffer
+        env:
+          DOTNET_GCStress: "0x3"
+        run: dotnet test tests/CyTypes.Security.Tests/CyTypes.Security.Tests.csproj --no-build -c Release --filter "FullyQualifiedName~SecureBuffer" --logger "trx;LogFileName=gc-stress-results.trx" --results-directory ./TestResults
+        timeout-minutes: 30
+
+      - name: Upload GC Stress Results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gc-stress-results
+          path: "./TestResults/**"
+
+  fuzz-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0"
+
+      - name: Build
+        run: dotnet build cyTypes.sln -c Release
+
+      - name: Run Fuzz Tests
+        run: dotnet test tests/CyTypes.Security.Tests/CyTypes.Security.Tests.csproj --no-build -c Release --filter "FullyQualifiedName~Fuzz" --logger "trx;LogFileName=fuzz-results.trx" --results-directory ./TestResults
+        timeout-minutes: 10
+
+      - name: Upload Fuzz Results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: fuzz-results
+          path: "./TestResults/**"

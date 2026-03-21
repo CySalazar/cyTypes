@@ -209,12 +209,69 @@ public class SecurityPolicyTests
         policyType.GetProperty(nameof(SecurityPolicy.MaxDecryptionCount))!.SetMethod.Should().BeNull();
         policyType.GetProperty(nameof(SecurityPolicy.AutoDestroy))!.SetMethod.Should().BeNull();
         policyType.GetProperty(nameof(SecurityPolicy.AllowDemotion))!.SetMethod.Should().BeNull();
+        policyType.GetProperty(nameof(SecurityPolicy.StreamChunkSize))!.SetMethod.Should().BeNull();
+        policyType.GetProperty(nameof(SecurityPolicy.RequireKeyExchange))!.SetMethod.Should().BeNull();
+        policyType.GetProperty(nameof(SecurityPolicy.StreamIntegrity))!.SetMethod.Should().BeNull();
     }
 
     [Fact]
     public void SecurityPolicy_IsSealed()
     {
         typeof(SecurityPolicy).Should().BeSealed();
+    }
+
+    [Fact]
+    public void Maximum_HasCorrectStreamChunkSize()
+    {
+        SecurityPolicy.Maximum.StreamChunkSize.Should().Be(4096);
+    }
+
+    [Fact]
+    public void Maximum_HasRequireKeyExchangeEnabled()
+    {
+        SecurityPolicy.Maximum.RequireKeyExchange.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Maximum_HasCorrectStreamIntegrity()
+    {
+        SecurityPolicy.Maximum.StreamIntegrity.Should().Be(StreamIntegrityMode.PerChunkPlusFooter);
+    }
+
+    [Fact]
+    public void Balanced_HasCorrectStreamChunkSize()
+    {
+        SecurityPolicy.Balanced.StreamChunkSize.Should().Be(65536);
+    }
+
+    [Fact]
+    public void Balanced_HasRequireKeyExchangeEnabled()
+    {
+        SecurityPolicy.Balanced.RequireKeyExchange.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Balanced_HasCorrectStreamIntegrity()
+    {
+        SecurityPolicy.Balanced.StreamIntegrity.Should().Be(StreamIntegrityMode.PerChunkPlusFooter);
+    }
+
+    [Fact]
+    public void Performance_HasCorrectStreamChunkSize()
+    {
+        SecurityPolicy.Performance.StreamChunkSize.Should().Be(262144);
+    }
+
+    [Fact]
+    public void Performance_HasRequireKeyExchangeDisabled()
+    {
+        SecurityPolicy.Performance.RequireKeyExchange.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Performance_HasCorrectStreamIntegrity()
+    {
+        SecurityPolicy.Performance.StreamIntegrity.Should().Be(StreamIntegrityMode.PerChunkOnly);
     }
 
     [Fact]

@@ -1,0 +1,38 @@
+name: NuGet Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0"
+
+      - name: Restore
+        run: dotnet restore cyTypes.sln
+
+      - name: Build
+        run: dotnet build cyTypes.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test cyTypes.sln --no-build -c Release
+
+      - name: Pack
+        run: dotnet pack cyTypes.sln --no-build -c Release -o ./nupkgs
+
+      - name: Push to NuGet
+        run: dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

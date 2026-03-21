@@ -1,0 +1,213 @@
+using System.Security.Cryptography;
+using System.Text;
+using CyTypes.Core.Crypto.Pqc;
+using CyTypes.Core.Memory;
+
+namespace CyTypes.Core.Crypto.KeyExchange;
+
+/// <summary>
+/// Hybrid key exchange combining X25519 (ECDH) and ML-KEM-1024 (post-quantum).
+/// The session key is derived as:
+/// <c>HKDF-SHA512(x25519_shared || mlkem_shared, salt=transcript_hash, info="CyTypes.SessionKey")</c>.
+/// </summary>
+public sealed class SessionKeyNegotiator : IDisposable
+{
+    private static readonly byte[] SessionKeyInfo = Encoding.UTF8.GetBytes("CyTypes.SessionKey");
+
+    private readonly ECDiffieHellman _ecdh;
+    private readonly MlKemKeyEncapsulation _mlKem;
+    private byte[]? _mlKemPublicKey;
+    private byte[]? _mlKemSecretKey;
+    private bool _isDisposed;
+
+    /// <summary>Gets the X25519 public key bytes (SubjectPublicKeyInfo DER).</summary>
+    public byte[] X25519PublicKey { get; }
+
+    /// <summary>Gets the ML-KEM-1024 public key bytes.</summary>
+    public byte[] MlKemPublicKey => _mlKemPublicKey ?? throw new InvalidOperationException("Key pair not generated.");
+
+    /// <summary>
+    /// Initializes a new <see cref="SessionKeyNegotiator"/> and generates ephemeral key pairs.
+    /// </summary>
+    public SessionKeyNegotiator()
+    {
+        _ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        _mlKem = new MlKemKeyEncapsulation();
+
+        X25519PublicKey = _ecdh.PublicKey.ExportSubjectPublicKeyInfo();
+
+        var (pub, sec) = _mlKem.GenerateKeyPair();
+        _mlKemPublicKey = pub;
+        _mlKemSecretKey = sec;
+    }
+
+    /// <summary>
+    /// Creates a <see cref="HandshakeMessage"/> to send to the peer.
+    /// </summary>
+    public HandshakeMessage CreateHandshake()
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        return new HandshakeMessage(X25519PublicKey, MlKemPublicKey);
+    }
+
+    /// <summary>
+    /// Initiator side: encapsulates shared secrets using the responder's public keys
+    /// and derives a session key.
+    /// </summary>
+    /// <param name="responderHandshake">The responder's handshake message containing their public keys.</param>
+    /// <returns>The derived 32-byte session key and the ML-KEM ciphertext to send to the responder.</returns>
+    public (SecureBuffer SessionKey, byte[] MlKemCiphertext) DeriveSessionKeyAsInitiator(HandshakeMessage responderHandshake)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        // X25519/ECDH shared secret
+        using var peerEcdh = ECDiffieHellman.Create();
+        peerEcdh.ImportSubjectPublicKeyInfo(responderHandshake.X25519PublicKey, out _);
+        var ecdhShared = _ecdh.DeriveKeyMaterial(peerEcdh.PublicKey);
+
+        // ML-KEM encapsulation
+        var (mlKemCiphertext, mlKemShared) = _mlKem.Encapsulate(responderHandshake.MlKemPublicKey);
+
+        try
+        {
+            return (DeriveSessionKey(ecdhShared, mlKemShared, responderHandshake), mlKemCiphertext);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(ecdhShared);
+            CryptographicOperations.ZeroMemory(mlKemShared);
+        }
+    }
+
+    /// <summary>
+    /// Responder side: decapsulates the ML-KEM ciphertext and derives the session key.
+    /// </summary>
+    /// <param name="initiatorHandshake">The initiator's handshake message.</param>
+    /// <param name="mlKemCiphertext">The ML-KEM ciphertext from the initiator.</param>
+    /// <returns>The derived 32-byte session key.</returns>
+    public SecureBuffer DeriveSessionKeyAsResponder(HandshakeMessage initiatorHandshake, byte[] mlKemCiphertext)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        if (_mlKemSecretKey == null)
+            throw new InvalidOperationException("ML-KEM secret key not available.");
+
+        // X25519/ECDH shared secret
+        using var peerEcdh = ECDiffieHellman.Create();
+        peerEcdh.ImportSubjectPublicKeyInfo(initiatorHandshake.X25519PublicKey, out _);
+        var ecdhShared = _ecdh.DeriveKeyMaterial(peerEcdh.PublicKey);
+
+        // ML-KEM decapsulation
+        var mlKemShared = _mlKem.Decapsulate(mlKemCiphertext, _mlKemSecretKey);
+
+        try
+        {
+            return DeriveSessionKey(ecdhShared, mlKemShared, initiatorHandshake);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(ecdhShared);
+            CryptographicOperations.ZeroMemory(mlKemShared);
+        }
+    }
+
+    private SecureBuffer DeriveSessionKey(byte[] ecdhShared, byte[] mlKemShared, HandshakeMessage peerHandshake)
+    {
+        // Combine shared secrets
+        var combined = new byte[ecdhShared.Length + mlKemShared.Length];
+        ecdhShared.CopyTo(combined, 0);
+        mlKemShared.CopyTo(combined, ecdhShared.Length);
+
+        // Transcript hash uses canonical (sorted) key ordering so both sides produce the same hash.
+        // Sort: smaller ECDH key first, then smaller ML-KEM key first.
+        var (ecdhFirst, ecdhSecond) = OrderByContent(X25519PublicKey, peerHandshake.X25519PublicKey);
+        var (mlKemFirst, mlKemSecond) = OrderByContent(MlKemPublicKey, peerHandshake.MlKemPublicKey);
+
+        var transcript = new byte[ecdhFirst.Length + ecdhSecond.Length +
+                                  mlKemFirst.Length + mlKemSecond.Length];
+        var offset = 0;
+        ecdhFirst.CopyTo(transcript, offset); offset += ecdhFirst.Length;
+        ecdhSecond.CopyTo(transcript, offset); offset += ecdhSecond.Length;
+        mlKemFirst.CopyTo(transcript, offset); offset += mlKemFirst.Length;
+        mlKemSecond.CopyTo(transcript, offset);
+
+        var salt = SHA512.HashData(transcript);
+
+        try
+        {
+            var keyBytes = HkdfKeyDerivation.DeriveKey(combined, outputLength: 32, salt: salt, info: SessionKeyInfo);
+            var sessionKey = new SecureBuffer(32);
+            sessionKey.Write(keyBytes);
+            CryptographicOperations.ZeroMemory(keyBytes);
+            return sessionKey;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(combined);
+            CryptographicOperations.ZeroMemory(transcript);
+            CryptographicOperations.ZeroMemory(salt);
+        }
+    }
+
+    private static (byte[] First, byte[] Second) OrderByContent(byte[] a, byte[] b)
+    {
+        var cmp = a.AsSpan().SequenceCompareTo(b);
+        return cmp <= 0 ? (a, b) : (b, a);
+    }
+
+    /// <summary>Disposes the negotiator and zeros all key material.</summary>
+    public void Dispose()
+    {
+        if (_isDisposed) return;
+        _isDisposed = true;
+
+        _ecdh.Dispose();
+
+        if (_mlKemSecretKey != null)
+        {
+            CryptographicOperations.ZeroMemory(_mlKemSecretKey);
+            _mlKemSecretKey = null;
+        }
+        if (_mlKemPublicKey != null)
+        {
+            _mlKemPublicKey = null;
+        }
+    }
+}
+
+/// <summary>
+/// Contains the public keys exchanged during a handshake.
+/// </summary>
+/// <param name="X25519PublicKey">The X25519/ECDH public key (SubjectPublicKeyInfo DER).</param>
+/// <param name="MlKemPublicKey">The ML-KEM-1024 public key.</param>
+public sealed record HandshakeMessage(byte[] X25519PublicKey, byte[] MlKemPublicKey)
+{
+    /// <summary>
+    /// Serializes the handshake message to bytes.
+    /// Layout: [ecdhKeyLen:4][ecdhKey:N][mlKemKey:M]
+    /// </summary>
+    public byte[] Serialize()
+    {
+        var output = new byte[4 + X25519PublicKey.Length + MlKemPublicKey.Length];
+        BitConverter.TryWriteBytes(output.AsSpan(0, 4), X25519PublicKey.Length);
+        X25519PublicKey.CopyTo(output, 4);
+        MlKemPublicKey.CopyTo(output, 4 + X25519PublicKey.Length);
+        return output;
+    }
+
+    /// <summary>Deserializes a handshake message from bytes.</summary>
+    public static HandshakeMessage Deserialize(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 4)
+            throw new ArgumentException("Handshake data is too short.", nameof(data));
+
+        var ecdhLen = BitConverter.ToInt32(data[..4]);
+        if (data.Length < 4 + ecdhLen)
+            throw new ArgumentException("Handshake data is truncated.", nameof(data));
+
+        var ecdhKey = data.Slice(4, ecdhLen).ToArray();
+        var mlKemKey = data[(4 + ecdhLen)..].ToArray();
+
+        return new HandshakeMessage(ecdhKey, mlKemKey);
+    }
+}

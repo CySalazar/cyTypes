@@ -2,7 +2,7 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <RootNamespace>CyTypes.Security.Tests</RootNamespace>
+    <RootNamespace>CyTypes.Streams.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,16 +17,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="SharpFuzz" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CyTypes.Core\CyTypes.Core.csproj" />
     <ProjectReference Include="..\..\src\CyTypes.Primitives\CyTypes.Primitives.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Wycheproof\TestVectors\*.json" />
-    <EmbeddedResource Include="Nist\TestVectors\*.json" />
+    <ProjectReference Include="..\..\src\CyTypes.Streams\CyTypes.Streams.csproj" />
   </ItemGroup>
 </Project>

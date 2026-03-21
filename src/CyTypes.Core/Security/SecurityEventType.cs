@@ -26,5 +26,13 @@ public enum SecurityEventType
     /// <summary>The security policy governing the instance was changed.</summary>
     PolicyChanged,
     /// <summary>The instance was disposed and its sensitive memory zeroed.</summary>
-    Disposed
+    Disposed,
+    /// <summary>A secure stream was opened.</summary>
+    StreamOpened,
+    /// <summary>A secure stream was closed.</summary>
+    StreamClosed,
+    /// <summary>A hybrid key exchange completed successfully.</summary>
+    KeyExchangeCompleted,
+    /// <summary>Stream integrity verification failed (HMAC or GCM tag mismatch).</summary>
+    StreamIntegrityFailed
 }

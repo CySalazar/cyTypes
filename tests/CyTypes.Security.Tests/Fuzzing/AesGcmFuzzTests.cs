@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using CyTypes.Core.Crypto;
+using CyTypes.Core.Crypto.KeyExchange;
 using FluentAssertions;
 using Xunit;
 
@@ -105,5 +106,44 @@ public class AesGcmFuzzTests
         var allOnes = new byte[64];
         Array.Fill(allOnes, (byte)0xFF);
         yield return new object[] { allOnes };
+    }
+
+    [Theory]
+    [MemberData(nameof(RandomByteInputs))]
+    public void ChunkedDecrypt_ArbitraryBytes_NeverCrashes(byte[] fuzzInput)
+    {
+        if (fuzzInput.Length == 0) return;
+        var key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte)i;
+        using var engine = new ChunkedCryptoEngine(key);
+        try
+        {
+            engine.DecryptChunk(fuzzInput, 0, out _);
+        }
+        catch (CryptographicException) { }
+        catch (ArgumentException) { }
+    }
+
+    [Theory]
+    [MemberData(nameof(RandomByteInputs))]
+    public void HandshakeDeserialize_ArbitraryBytes_NeverCrashes(byte[] fuzzInput)
+    {
+        try
+        {
+            HandshakeMessage.Deserialize(fuzzInput);
+        }
+        catch (ArgumentException) { }
+    }
+
+    [Theory]
+    [MemberData(nameof(RandomByteInputs))]
+    public void BinaryDeserialize_ArbitraryBytes_NeverCrashes(byte[] fuzzInput)
+    {
+        try
+        {
+            var serializer = new BinarySerializer();
+            serializer.Deserialize<string>(fuzzInput);
+        }
+        catch (ArgumentException) { }
     }
 }

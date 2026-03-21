@@ -26,6 +26,7 @@
   - [EF Core Integration](#ef-core-with-and-without-cytypes)
   - [JSON Serialization](#json-serialization)
   - [Logging with Auto-Redaction](#logging-with-auto-redaction)
+  - [Encrypted Streams (File, IPC, TCP)](#encrypted-streams-file-ipc-tcp)
   - [Dependency Injection](#dependency-injection-setup)
 - [Supported Types](#supported-types)
 - [API Reference](#api-reference)
@@ -101,6 +102,9 @@ dotnet add package CyTypes.DependencyInjection
 
 # Fully Homomorphic Encryption (Microsoft SEAL)
 dotnet add package CyTypes.Fhe
+
+# Encrypted streaming (file, IPC, TCP)
+dotnet add package CyTypes.Streams
 ```
 
 ## Quick Start
@@ -417,6 +421,99 @@ redactingLogger.LogInformation("Data: {Data}", someString);
 
 The `RedactingLoggerProvider` wraps any `ILoggerProvider` to apply redaction across your entire logging pipeline.
 
+### Encrypted Streams (File, IPC, TCP)
+
+```csharp
+// ── .NET native — file I/O ──────────────────
+byte[] data = Encoding.UTF8.GetBytes("sensitive payload");
+File.WriteAllBytes("data.bin", data);               // plaintext on disk
+byte[] read = File.ReadAllBytes("data.bin");         // plaintext in memory
+
+// ── cyTypes — encrypted file I/O ────────────
+using CyTypes.Streams;
+using CyTypes.Streams.File;
+
+byte[] key = RandomNumberGenerator.GetBytes(32);
+using (var file = CyFileStream.CreateWrite("data.cys", key))
+    file.Write(data);                                 // AES-256-GCM chunked, atomic write
+
+using (var file = CyFileStream.OpenRead("data.cys", key))
+{
+    var buf = new byte[data.Length];
+    file.Read(buf);                                   // decrypted + HMAC verified
+}
+
+// Passphrase-based (HKDF-derived key, salt stored in header)
+using (var file = CyFileStream.CreateWrite("data.cys", "my-passphrase"))
+    file.Write(data);
+
+using (var file = CyFileStream.OpenRead("data.cys", "my-passphrase"))
+{
+    var buf = new byte[data.Length];
+    file.Read(buf);
+}
+```
+
+```csharp
+// ── Typed streaming — write/read CyType values ──
+using var ms = new MemoryStream();
+
+byte[] key = RandomNumberGenerator.GetBytes(32);
+using (var stream = CyStream.CreateWriter(ms, key, Guid.NewGuid()))
+using (var writer = new CyStreamWriter(stream))
+{
+    writer.WriteValue(new CyInt(42));
+    writer.WriteValue(new CyString("hello"));
+    writer.Complete();   // writes footer HMAC
+}
+
+ms.Position = 0;
+using (var stream = CyStream.CreateReader(ms, key))
+using (var reader = new CyStreamReader(stream))
+{
+    foreach (var (typeId, payload) in reader.ReadAll())
+    {
+        // typeId = CyTypeIds.CyInt (0x0001), CyTypeIds.CyString (0x0007), etc.
+    }
+}
+```
+
+```csharp
+// ── IPC (Named Pipes) — automatic hybrid key exchange ──
+using CyTypes.Streams.Ipc;
+
+// Server
+using var server = new CyPipeServer("my-pipe");
+using var conn = await server.AcceptAsync();          // X25519 + ML-KEM handshake
+await conn.SendAsync(data);
+byte[]? received = await conn.ReceiveAsync();
+
+// Client
+using var client = new CyPipeClient();
+await client.ConnectAsync("my-pipe");                 // handshake completes automatically
+await client.Stream.SendAsync(data);
+byte[]? received = await client.Stream.ReceiveAsync();
+```
+
+```csharp
+// ── TCP Networking — automatic hybrid key exchange ──
+using CyTypes.Streams.Network;
+using System.Net;
+
+// Server
+using var server = new CyNetworkServer(IPAddress.Loopback, 9000);
+server.Start();
+using var conn = await server.AcceptAsync();          // X25519 + ML-KEM handshake
+await conn.SendAsync(data);
+byte[]? received = await conn.ReceiveAsync();
+
+// Client
+using var client = new CyNetworkClient();
+await client.ConnectAsync("127.0.0.1", 9000);        // handshake completes automatically
+await client.Stream.SendAsync(data);
+byte[]? received = await client.Stream.ReceiveAsync();
+```
+
 ### Dependency Injection Setup
 
 ```csharp
@@ -438,6 +535,9 @@ builder.Services.AddCyTypesFhe(sp =>
     // Initialize with BFV scheme parameters...
     return new SealBfvEngine(keyManager);
 });
+
+// Optional: register encrypted streaming (SessionKeyNegotiator)
+builder.Services.AddCyTypesStreams();
 ```
 
 `AddCyTypes` registers: default `SecurityPolicy`, crypto engine, `SecurityAuditor`, `LoggingAuditSink`, and optionally the `RedactingLoggerProvider` and PQC `MlKemKeyEncapsulation`.
@@ -458,6 +558,21 @@ builder.Services.AddCyTypesFhe(sp =>
 | `CyBytes` | `byte[]` | `==  !=  <  >  <=  >=` + implicit/explicit conversions | `IEquatable<CyBytes>`, `IComparable<CyBytes>` |
 | `CyGuid` | `Guid` | `==  !=  <  >  <=  >=` + implicit/explicit conversions | `IEquatable<CyGuid>`, `IComparable<CyGuid>` |
 | `CyDateTime` | `DateTime` | `==  !=  <  >  <=  >=` | `IEquatable<CyDateTime>`, `IComparable<CyDateTime>` |
+
+**Stream Type IDs** — used by `CyStreamWriter`/`CyStreamReader` for framed serialization:
+
+| CyType | Type ID |
+|--------|---------|
+| `CyInt` | `0x0001` |
+| `CyLong` | `0x0002` |
+| `CyDouble` | `0x0003` |
+| `CyFloat` | `0x0004` |
+| `CyDecimal` | `0x0005` |
+| `CyBool` | `0x0006` |
+| `CyString` | `0x0007` |
+| `CyBytes` | `0x0008` |
+| `CyGuid` | `0x0009` |
+| `CyDateTime` | `0x000A` |
 
 ---
 
@@ -683,6 +798,14 @@ Four predefined policies control the security/performance tradeoff:
 | `Performance` | Unlimited | No | Relaxed | Unchecked | PinnedLocked |
 | `HomomorphicBasic` | Reserved for FHE | — | — | — | — |
 
+**Stream properties:**
+
+| Policy | Stream Chunk Size | Key Exchange | Stream Integrity |
+|--------|-------------------|--------------|------------------|
+| `Maximum` | 4 KB | Required | PerChunk + Footer HMAC |
+| `Balanced` | 64 KB | Required | PerChunk + Footer HMAC |
+| `Performance` | 256 KB | Not required | PerChunk only |
+
 ```csharp
 // Maximum security — 10 decryptions max, auto-destroy, strict taint
 using var secret = new CyInt(42, SecurityPolicy.Maximum);
@@ -740,7 +863,7 @@ using var cy = new CyInt(42, policy);
 | `WithKeyStoreMinimumCapability(KeyStoreCapability)` | Minimum key store capability |
 | `Build()` | Validate and build the policy |
 
-> **Note:** FHE-based arithmetic/comparison modes (`HomomorphicFull`, `HomomorphicBasic`, `HomomorphicCircuit`, `HomomorphicEquality`) are reserved for Phase 3 and cannot be selected via the builder.
+> **Note:** FHE-based arithmetic/comparison modes (`HomomorphicFull`, `HomomorphicBasic`, `HomomorphicCircuit`, `HomomorphicEquality`) are reserved for Phase 3 and cannot be selected via the builder. Stream properties (`StreamChunkSize`, `RequireKeyExchange`, `StreamIntegrity`) are currently configured via the predefined policies and are not yet exposed on `SecurityPolicyBuilder`.
 
 ## Taint Tracking
 
@@ -911,7 +1034,7 @@ RelinKeys rlk = keyManager.RelinKeys;
 
 ## Benchmarks
 
-The cyTypes wrapper adds **< 1% overhead** over raw AES-GCM encryption. HMAC and HKDF wrappers are equally lean. Full results from 112 core benchmarks (9 classes) and 13 application benchmarks (3 classes) are available in **[benchmarks.md](benchmarks.md)**.
+The cyTypes wrapper adds **< 1% overhead** over raw AES-GCM encryption. HMAC and HKDF wrappers are equally lean. Full results from 112 core benchmarks (9 classes), 13 application benchmarks (3 classes), and streaming benchmarks (3 classes) are available in **[benchmarks.md](benchmarks.md)**.
 
 | Operation | Overhead vs Native | Verdict |
 |-----------|--------------------|---------|
@@ -923,12 +1046,18 @@ The cyTypes wrapper adds **< 1% overhead** over raw AES-GCM encryption. HMAC and
 | SecureBuffer alloc | 9-118x vs array | Expected (secure memory) |
 | FHE BFV encrypt | ~817x vs AES-GCM | Expected (homomorphic) |
 | JSON serialize (single) | ~108x | Expected (per-field encryption) |
+| ChunkedCryptoEngine (chunk encrypt) | Pending | Run with `--filter "*Stream*"` |
+| CyStream round-trip (MemoryStream) | Pending | Run with `--filter "*Stream*"` |
+| CyFileStream round-trip (disk I/O) | Pending | Run with `--filter "*Stream*"` |
 
 ### Running Benchmarks
 
 ```bash
 # Core benchmarks
 dotnet run --project tests/CyTypes.Benchmarks -c Release
+
+# Streaming benchmarks
+dotnet run --project tests/CyTypes.Benchmarks -c Release -- --filter "*Stream*"
 
 # Application benchmarks (API, EF Core, JSON)
 dotnet run --project tests/CyTypes.Benchmarks.Application -c Release
@@ -947,8 +1076,11 @@ dotnet run --project tests/CyTypes.Benchmarks.Application -c Release
 | Component | Algorithm | Details |
 |-----------|-----------|---------|
 | Encryption | AES-256-GCM | 12-byte random nonce, 16-byte auth tag |
+| Stream Encryption | Chunked AES-256-GCM | Per-chunk nonce, sequence number, key ratcheting every 2^20 chunks |
 | Key Derivation | HKDF-SHA512 | Contextual info for key diversification |
+| Key Exchange | X25519 + ML-KEM-1024 | Hybrid post-quantum key exchange (RFC 7748 + FIPS 203) |
 | Secure Comparison | HMAC-SHA512 | `FixedTimeEquals` — immune to timing attacks |
+| Stream Integrity | HMAC-SHA512 | Footer HMAC over header + all chunk GCM tags |
 | Nonce Generation | `RandomNumberGenerator.Fill()` | CSPRNG per encryption |
 
 ## Project Structure
@@ -962,7 +1094,8 @@ src/
 ├── CyTypes.Logging             # Auto-redacting logger
 ├── CyTypes.EntityFramework     # EF Core value converters
 ├── CyTypes.DependencyInjection # IServiceCollection extensions
-└── CyTypes.Fhe                 # Fully Homomorphic Encryption (Microsoft SEAL)
+├── CyTypes.Fhe                 # Fully Homomorphic Encryption (Microsoft SEAL)
+└── CyTypes.Streams             # Encrypted streaming (file, IPC, TCP)
 
 tests/
 ├── CyTypes.Core.Tests
@@ -974,6 +1107,7 @@ tests/
 ├── CyTypes.DependencyInjection.Tests
 ├── CyTypes.Fhe.Tests
 ├── CyTypes.Security.Tests            # Security/compliance test suite
+├── CyTypes.Streams.Tests
 ├── CyTypes.Benchmarks                # Core micro-benchmarks (BenchmarkDotNet)
 ├── CyTypes.Benchmarks.Application    # Application-level benchmarks (API, EF Core, JSON)
 └── CyTypes.Tools.HeapAnalysis        # Memory analysis tool
@@ -1012,6 +1146,7 @@ dotnet run --project tests/CyTypes.Benchmarks -c Release
 | 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | In Progress (~60%) |
 | 3b | FHE — CKKS support, comparison/string operations on ciphertexts | Planned |
 | 3c | PQC — ML-KEM-1024 key encapsulation (stub present, integration pending) | In Progress (~90%) |
+| 4 | Encrypted streaming — chunked AES-256-GCM, file I/O, IPC (named pipes), TCP, hybrid key exchange | Complete |
 
 > **Phase 3 status:** The `CyTypes.Fhe` package exists with a working `SealBfvEngine` for integer arithmetic on BFV ciphertexts, but `SecurityPolicyBuilder` still rejects FHE modes — direct use of the Fhe package API is required. CKKS (approximate arithmetic) and homomorphic comparisons/string operations are not yet implemented. ML-KEM-1024 key encapsulation (`MlKemKeyEncapsulation`) is registered via DI but not yet wired into the encryption pipeline. Phase 3 focuses on completing these integrations for production use.
 

@@ -50,6 +50,15 @@ public sealed class SecurityPolicy
     /// <summary>Gets the integer arithmetic overflow mode.</summary>
     public OverflowMode Overflow { get; }
 
+    /// <summary>Gets the plaintext chunk size for stream encryption in bytes.</summary>
+    public int StreamChunkSize { get; }
+
+    /// <summary>Gets whether key exchange is required for IPC/network streams.</summary>
+    public bool RequireKeyExchange { get; }
+
+    /// <summary>Gets the stream integrity verification mode.</summary>
+    public StreamIntegrityMode StreamIntegrity { get; }
+
     internal SecurityPolicy(
         string name,
         ArithmeticMode arithmetic,
@@ -64,7 +73,10 @@ public sealed class SecurityPolicy
         bool allowDemotion,
         int? decryptionRateLimit = null,
         KeyStoreCapability keyStoreMinimumCapability = KeyStoreCapability.InMemoryOnly,
-        OverflowMode overflow = OverflowMode.Unchecked)
+        OverflowMode overflow = OverflowMode.Unchecked,
+        int streamChunkSize = 65536,
+        bool requireKeyExchange = true,
+        StreamIntegrityMode streamIntegrity = StreamIntegrityMode.PerChunkPlusFooter)
     {
         Name = name;
         Arithmetic = arithmetic;
@@ -80,6 +92,9 @@ public sealed class SecurityPolicy
         DecryptionRateLimit = decryptionRateLimit;
         KeyStoreMinimumCapability = keyStoreMinimumCapability;
         Overflow = overflow;
+        StreamChunkSize = streamChunkSize;
+        RequireKeyExchange = requireKeyExchange;
+        StreamIntegrity = streamIntegrity;
     }
 
     /// <summary>
@@ -100,7 +115,10 @@ public sealed class SecurityPolicy
         allowDemotion: false,
         decryptionRateLimit: 10,
         keyStoreMinimumCapability: KeyStoreCapability.OsProtected,
-        overflow: OverflowMode.Checked);
+        overflow: OverflowMode.Checked,
+        streamChunkSize: 4096,
+        requireKeyExchange: true,
+        streamIntegrity: StreamIntegrityMode.PerChunkPlusFooter);
 
     /// <summary>
     /// Balanced policy (default). SecureEnclave arithmetic, HMAC comparison, standard taint.
@@ -116,7 +134,10 @@ public sealed class SecurityPolicy
         taint: TaintMode.Standard,
         maxDecryptionCount: 100,
         autoDestroy: false,
-        allowDemotion: false);
+        allowDemotion: false,
+        streamChunkSize: 65536,
+        requireKeyExchange: true,
+        streamIntegrity: StreamIntegrityMode.PerChunkPlusFooter);
 
     /// <summary>
     /// Performance policy. Minimal overhead, unchecked arithmetic, relaxed taint.
@@ -132,7 +153,10 @@ public sealed class SecurityPolicy
         taint: TaintMode.Relaxed,
         maxDecryptionCount: int.MaxValue,
         autoDestroy: false,
-        allowDemotion: false);
+        allowDemotion: false,
+        streamChunkSize: 262144,
+        requireKeyExchange: false,
+        streamIntegrity: StreamIntegrityMode.PerChunkOnly);
 
     /// <summary>
     /// Homomorphic basic policy. Enables FHE arithmetic (add, subtract, multiply) on integer types.

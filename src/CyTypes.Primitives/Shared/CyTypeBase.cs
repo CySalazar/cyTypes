@@ -414,6 +414,24 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         return ToString();
     }
 
+    /// <summary>
+    /// Writes this value's encrypted bytes to a stream writer.
+    /// The value is transferred in its encrypted form — no plaintext is ever exposed.
+    /// </summary>
+    /// <param name="writer">The stream writer to write to.</param>
+    public void WriteTo(object writer)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        // Uses dynamic dispatch to avoid CyTypes.Streams dependency in Primitives.
+        // The writer must have a WriteValue<TSelf, TNative>(CyTypeBase<TSelf, TNative>) method.
+        var writeMethod = writer.GetType().GetMethod("WriteValue");
+        if (writeMethod == null)
+            throw new ArgumentException("Writer does not have a WriteValue method.", nameof(writer));
+
+        var genericMethod = writeMethod.MakeGenericMethod(typeof(TSelf), typeof(TNative));
+        genericMethod.Invoke(writer, [this]);
+    }
+
     /// <summary>Disposes the instance, zeroing all secure buffers and keys.</summary>
     public void Dispose()
     {

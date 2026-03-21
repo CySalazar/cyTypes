@@ -13,7 +13,12 @@ public class EncryptionBenchmarks
     private byte[] _plaintext = null!;
     private byte[] _ciphertext = null!;
 
-    [Params(16, 64, 256, 1024, 4096)]
+    /// <summary>
+    /// Payload sizes following eBACS (ECRYPT Benchmarking of Cryptographic Systems) methodology.
+    /// Reference: bench.cr.yp.to (Daniel J. Bernstein, Tanja Lange).
+    /// Standard sizes enable cross-library performance comparison in cycles/byte.
+    /// </summary>
+    [Params(0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536)]
     public int PayloadSize { get; set; }
 
     [GlobalSetup]
