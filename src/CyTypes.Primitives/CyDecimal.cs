@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -15,6 +16,14 @@ public sealed partial class CyDecimal : CyTypeBase<CyDecimal, decimal>, ICyNumer
 
     /// <summary>Initializes a new <see cref="CyDecimal"/> with the specified decimal value.</summary>
     public CyDecimal(decimal value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyDecimal"/> by cloning encrypted data without decryption.</summary>
+    internal CyDecimal(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyDecimal CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <inheritdoc/>
     protected override byte[] SerializeValue(decimal value)

@@ -17,6 +17,9 @@ public static class Program
         ("All 10 Types Showcase", AllTypesShowcase.Run),
         ("Performance Overhead - CyTypes vs Native C#", PerformanceOverhead.Run),
         ("Protection Level Benchmarks", ProtectionLevelBenchmarks.Run),
+        ("EF Core Integration", EfCoreIntegration.Run),
+        ("JSON Serialization", JsonSerialization.Run),
+        ("Stream Encryption", StreamEncryption.Run),
     ];
 
     public static void Main(string[] args)

@@ -1,4 +1,5 @@
 using CyTypes.Core.Policy;
+using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
 
@@ -30,7 +31,7 @@ public sealed partial class CyBool
     {
         if (left is null && right is null) return true;
         if (left is null || right is null) return false;
-        return left.DecryptValue() == right.DecryptValue();
+        return ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
     }
     /// <summary>Determines whether two <see cref="CyBool"/> instances are not equal.</summary>
     public static bool operator !=(CyBool? left, CyBool? right) => !(left == right);
@@ -71,7 +72,11 @@ public sealed partial class CyBool
     public bool Equals(CyBool? other) => other is not null && this == other;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyBool);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     private static CyBool LogicOp(CyBool left, CyBool right, Func<bool, bool, bool> op)

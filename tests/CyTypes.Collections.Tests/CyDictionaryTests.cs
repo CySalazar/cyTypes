@@ -295,4 +295,86 @@ public sealed class CyDictionaryTests
         dict.ContainsKey(1).Should().BeTrue();
         dict.ContainsKey(2).Should().BeFalse();
     }
+
+    [Fact]
+    public void Detach_RemovesWithoutDisposing()
+    {
+        using var dict = new CyDictionary<string, CyInt>();
+        var value = new CyInt(42);
+        dict.Add("key", value);
+
+        var detached = dict.Detach("key");
+
+        dict.Count.Should().Be(0);
+        detached.Should().NotBeNull();
+        detached!.IsDisposed.Should().BeFalse();
+        detached.ToInsecureInt().Should().Be(42);
+        detached.Dispose();
+    }
+
+    [Fact]
+    public void Detach_MissingKey_ReturnsDefault()
+    {
+        using var dict = new CyDictionary<string, CyInt>();
+
+        var detached = dict.Detach("missing");
+
+        detached.Should().BeNull();
+    }
+
+    [Fact]
+    public void IDictionary_Add_KeyValuePair()
+    {
+        using var dict = new CyDictionary<string, CyInt>();
+        using var value = new CyInt(42);
+        ICollection<KeyValuePair<string, CyInt>> collection = dict;
+
+        collection.Add(new KeyValuePair<string, CyInt>("key", value));
+
+        dict.Count.Should().Be(1);
+        dict["key"].Should().BeSameAs(value);
+    }
+
+    [Fact]
+    public void IDictionary_Remove_KeyValuePair()
+    {
+        using var dict = new CyDictionary<string, CyInt>();
+        var value = new CyInt(42);
+        dict.Add("key", value);
+        ICollection<KeyValuePair<string, CyInt>> collection = dict;
+
+        var result = collection.Remove(new KeyValuePair<string, CyInt>("key", value));
+
+        result.Should().BeTrue();
+        dict.Count.Should().Be(0);
+        value.IsDisposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IDictionary_Contains_KeyValuePair()
+    {
+        using var dict = new CyDictionary<string, CyInt>();
+        using var value = new CyInt(42);
+        dict.Add("key", value);
+        ICollection<KeyValuePair<string, CyInt>> collection = dict;
+
+        collection.Contains(new KeyValuePair<string, CyInt>("key", value)).Should().BeTrue();
+        using var other = new CyInt(42);
+        collection.Contains(new KeyValuePair<string, CyInt>("key", other)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IDictionary_CopyTo()
+    {
+        using var dict = new CyDictionary<string, CyInt>();
+        using var value = new CyInt(42);
+        dict.Add("key", value);
+        ICollection<KeyValuePair<string, CyInt>> collection = dict;
+
+        var array = new KeyValuePair<string, CyInt>[1];
+        collection.CopyTo(array, 0);
+
+        array[0].Key.Should().Be("key");
+        array[0].Value.Should().BeSameAs(value);
+    }
 }

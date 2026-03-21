@@ -80,6 +80,28 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <summary>Tag type to disambiguate the FHE ciphertext constructor from the value constructor.</summary>
     protected readonly struct FheCiphertextTag;
 
+    /// <summary>
+    /// Initializes a new instance by copying encrypted data and key material without decryption.
+    /// Used by <see cref="Clone"/> to create a copy without exposing plaintext.
+    /// </summary>
+    protected CyTypeBase(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+    {
+        ArgumentNullException.ThrowIfNull(encryptedBytes);
+        ArgumentNullException.ThrowIfNull(clonedKeyManager);
+        Policy = policy ?? throw new ArgumentNullException(nameof(policy));
+        InstanceId = Guid.NewGuid();
+        CreatedUtc = DateTime.UtcNow;
+        _cryptoEngine = new AesGcmEngine();
+        _keyManager = clonedKeyManager;
+        _isFheMode = policy.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull;
+        Security = new SecurityContext(InstanceId, policy.MaxDecryptionCount, policy.DecryptionRateLimit);
+
+        Security.AutoDestroyTriggered += OnAutoDestroy;
+        Security.TaintCleared += OnTaintCleared;
+
+        SetEncryptedBytes(encryptedBytes);
+    }
+
     /// <summary>Encrypts the specified value and stores it in a secure buffer.</summary>
     protected void EncryptValue(TNative value)
     {
@@ -269,6 +291,25 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     internal ReadOnlySpan<byte> GetKey() => _keyManager.CurrentKey;
 
     /// <summary>
+    /// Creates a deep copy of this instance without decrypting the value.
+    /// The clone has a new InstanceId, fresh timestamps, and clean security flags.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">This instance has been disposed.</exception>
+    public virtual TSelf Clone()
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        var encBytes = GetEncryptedBytes();
+        var clonedKey = _keyManager.Clone();
+        return CreateClone(encBytes, Policy, clonedKey);
+    }
+
+    /// <summary>
+    /// Creates a new instance from cloned encrypted bytes and key manager.
+    /// Must be overridden by each concrete type to call its clone constructor.
+    /// </summary>
+    protected abstract TSelf CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager);
+
+    /// <summary>
     /// Serializes the encrypted data into a secure binary envelope with HMAC-SHA512 integrity verification.
     /// The HMAC subkey is derived from the encryption key via HKDF.
     /// </summary>
@@ -305,9 +346,8 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// </summary>
     public TNative ToInsecureValue()
     {
-        var value = DecryptValue();
         MarkCompromised();
-        return value;
+        return DecryptValue();
     }
 
     /// <summary>
@@ -407,10 +447,21 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         return $"[{typeof(TSelf).Name}:Encrypted|Policy={Policy.Name}|Compromised={IsCompromised}]";
     }
 
-    /// <summary>Returns a redacted string representation; format parameters are ignored for security.</summary>
-    public string ToString(string? format, IFormatProvider? formatProvider)
+    /// <summary>
+    /// Returns a formatted string representation if the policy allows it, otherwise returns a redacted string.
+    /// When <see cref="SecurityPolicy.Formatting"/> is <see cref="FormattingMode.AllowFormatted"/>,
+    /// the value is decrypted, formatted, and the instance is marked as compromised.
+    /// </summary>
+    public virtual string ToString(string? format, IFormatProvider? formatProvider)
     {
-        // SECURITY: Never expose plaintext through format strings
+        if (Policy.Formatting == FormattingMode.AllowFormatted)
+        {
+            MarkCompromised();
+            var value = DecryptValue();
+            if (value is IFormattable formattable)
+                return formattable.ToString(format, formatProvider);
+            return value?.ToString() ?? string.Empty;
+        }
         return ToString();
     }
 

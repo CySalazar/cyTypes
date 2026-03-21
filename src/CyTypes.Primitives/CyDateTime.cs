@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -11,6 +12,14 @@ public sealed partial class CyDateTime : CyTypeBase<CyDateTime, DateTime>, IComp
 {
     /// <summary>Initializes a new <see cref="CyDateTime"/> with the specified DateTime value.</summary>
     public CyDateTime(DateTime value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyDateTime"/> by cloning encrypted data without decryption.</summary>
+    internal CyDateTime(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyDateTime CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <inheritdoc/>
     protected override byte[] SerializeValue(DateTime value) => BitConverter.GetBytes(value.Ticks);

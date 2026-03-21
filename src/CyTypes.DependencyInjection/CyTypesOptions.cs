@@ -25,4 +25,10 @@ public sealed class CyTypesOptions
 
     /// <summary>Gets or sets whether post-quantum key encapsulation is enabled.</summary>
     public bool EnablePqcKeyEncapsulation { get; set; }
+
+    /// <summary>Gets or sets the buffer size for the secure buffer pool. Default is 4096 bytes.</summary>
+    public int SecureBufferPoolSize { get; set; } = 4096;
+
+    /// <summary>Gets or sets the number of buffers to pre-allocate in the secure buffer pool.</summary>
+    public int SecureBufferPoolPreAllocate { get; set; }
 }

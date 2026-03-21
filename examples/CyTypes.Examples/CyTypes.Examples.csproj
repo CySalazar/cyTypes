@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -12,5 +13,12 @@
     <ProjectReference Include="..\..\src\CyTypes.Core\CyTypes.Core.csproj" />
     <ProjectReference Include="..\..\src\CyTypes.Primitives\CyTypes.Primitives.csproj" />
     <ProjectReference Include="..\..\src\CyTypes.Fhe\CyTypes.Fhe.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Collections\CyTypes.Collections.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.EntityFramework\CyTypes.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Streams\CyTypes.Streams.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 </Project>

@@ -240,4 +240,43 @@ public class PolicyResolverTests
 
         result.AllowDemotion.Should().BeFalse();
     }
+
+    // === Explain() tests ===
+
+    [Fact]
+    public void Explain_ReturnsSameResolvedNameAsResolve()
+    {
+        var resolved = PolicyResolver.Resolve(SecurityPolicy.Balanced, SecurityPolicy.Performance);
+        var explanation = PolicyResolver.Explain(SecurityPolicy.Balanced, SecurityPolicy.Performance);
+
+        explanation.ResolvedName.Should().Be(resolved.Name);
+    }
+
+    [Fact]
+    public void Explain_ListsAllComponents()
+    {
+        var explanation = PolicyResolver.Explain(SecurityPolicy.Balanced, SecurityPolicy.Performance);
+
+        explanation.Components.Should().NotBeEmpty();
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("Arithmetic");
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("Taint");
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("Memory");
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("Audit");
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("KeyRotation");
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("MaxDecryptionCount");
+        explanation.Components.Select(c => c.ComponentName).Should().Contain("Overflow");
+    }
+
+    [Fact]
+    public void Explain_ShowsCorrectResolutionForMixedPolicies()
+    {
+        var explanation = PolicyResolver.Explain(SecurityPolicy.Maximum, SecurityPolicy.Performance, allowStrictCrossPolicy: true);
+
+        var arithmetic = explanation.Components.First(c => c.ComponentName == "Arithmetic");
+        arithmetic.ResolvedValue.Should().Be(ArithmeticMode.SecureEnclave.ToString());
+        arithmetic.Rule.Should().NotBeNullOrEmpty();
+
+        var taint = explanation.Components.First(c => c.ComponentName == "Taint");
+        taint.ResolvedValue.Should().Be(TaintMode.Strict.ToString());
+    }
 }

@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
@@ -18,6 +19,14 @@ public sealed partial class CyLong : CyTypeBase<CyLong, long>, ICyNumeric<CyLong
 
     /// <summary>Initializes a new <see cref="CyLong"/> from pre-existing FHE ciphertext bytes.</summary>
     internal CyLong(byte[] fheCiphertext, SecurityPolicy policy) : base(fheCiphertext, policy, default(FheCiphertextTag)) { }
+
+    /// <summary>Initializes a new <see cref="CyLong"/> by cloning encrypted data without decryption.</summary>
+    internal CyLong(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyLong CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <summary>Serializes a long value to its byte representation.</summary>
     protected override byte[] SerializeValue(long value) => BitConverter.GetBytes(value);

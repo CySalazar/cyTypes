@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -11,6 +12,14 @@ public sealed partial class CyBool : CyTypeBase<CyBool, bool>, IEquatable<CyBool
 {
     /// <summary>Initializes a new <see cref="CyBool"/> with the specified boolean value.</summary>
     public CyBool(bool value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyBool"/> by cloning encrypted data without decryption.</summary>
+    internal CyBool(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyBool CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <inheritdoc/>
     protected override byte[] SerializeValue(bool value) => [(byte)(value ? 1 : 0)];

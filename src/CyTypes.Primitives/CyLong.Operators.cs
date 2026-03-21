@@ -25,12 +25,54 @@ public sealed partial class CyLong
     /// <summary>Computes the remainder of two <see cref="CyLong"/> values.</summary>
     public static CyLong operator %(CyLong left, CyLong right) => BinaryOp(left, right, (a, b) => a % b, (a, b) => checked(a % b), FheOp.None);
 
+    // === Unary Operators ===
+
+    /// <summary>Returns a new <see cref="CyLong"/> with the same value (unary plus / identity).</summary>
+    public static CyLong operator +(CyLong value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyLong(val, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Negates the specified <see cref="CyLong"/> value.</summary>
+    public static CyLong operator -(CyLong value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyLong(-val, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Increments the specified <see cref="CyLong"/> value by one.</summary>
+    public static CyLong operator ++(CyLong value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyLong(val + 1, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Decrements the specified <see cref="CyLong"/> value by one.</summary>
+    public static CyLong operator --(CyLong value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyLong(val - 1, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
     /// <summary>Determines whether two <see cref="CyLong"/> instances are equal.</summary>
     public static bool operator ==(CyLong? left, CyLong? right)
     {
         if (left is null && right is null) return true;
         if (left is null || right is null) return false;
-        return CompareOp(left, right, (a, b) => a == b);
+        return ConstantTimeEquals(left, right);
     }
     /// <summary>Determines whether two <see cref="CyLong"/> instances are not equal.</summary>
     public static bool operator !=(CyLong? left, CyLong? right) => !(left == right);
@@ -96,7 +138,11 @@ public sealed partial class CyLong
     public bool Equals(CyLong? other) => other is not null && this == other;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyLong);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     private static CyLong BinaryOp(CyLong left, CyLong right, Func<long, long, long> op, Func<long, long, long> checkedOp, FheOp fheOp)
@@ -138,4 +184,7 @@ public sealed partial class CyLong
 
     private static bool CompareOp(CyLong left, CyLong right, Func<long, long, bool> op)
         => op(left.DecryptValue(), right.DecryptValue());
+
+    private static bool ConstantTimeEquals(CyLong left, CyLong right)
+        => ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
 }

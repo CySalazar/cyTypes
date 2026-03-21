@@ -1,4 +1,5 @@
 using CyTypes.Core.Policy;
+using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
 
@@ -20,12 +21,54 @@ public sealed partial class CyDecimal
     /// <summary>Returns the remainder of dividing the left <see cref="CyDecimal"/> by the right.</summary>
     public static CyDecimal operator %(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a % b);
 
+    // === Unary Operators ===
+
+    /// <summary>Returns a new <see cref="CyDecimal"/> with the same value (unary plus / identity).</summary>
+    public static CyDecimal operator +(CyDecimal value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyDecimal(val, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Negates the specified <see cref="CyDecimal"/> value.</summary>
+    public static CyDecimal operator -(CyDecimal value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyDecimal(-val, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Increments the specified <see cref="CyDecimal"/> value by one.</summary>
+    public static CyDecimal operator ++(CyDecimal value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyDecimal(val + 1m, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Decrements the specified <see cref="CyDecimal"/> value by one.</summary>
+    public static CyDecimal operator --(CyDecimal value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyDecimal(val - 1m, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
     /// <summary>Determines whether two <see cref="CyDecimal"/> instances are equal.</summary>
     public static bool operator ==(CyDecimal? left, CyDecimal? right)
     {
         if (left is null && right is null) return true;
         if (left is null || right is null) return false;
-        return CompareOp(left, right, (a, b) => a == b);
+        return ConstantTimeEquals(left, right);
     }
     /// <summary>Determines whether two <see cref="CyDecimal"/> instances are not equal.</summary>
     public static bool operator !=(CyDecimal? left, CyDecimal? right) => !(left == right);
@@ -42,7 +85,11 @@ public sealed partial class CyDecimal
     public bool Equals(CyDecimal? other) => other is not null && this == other;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyDecimal);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     private static CyDecimal BinaryOp(CyDecimal left, CyDecimal right, Func<decimal, decimal, decimal> op)
@@ -58,4 +105,7 @@ public sealed partial class CyDecimal
 
     private static bool CompareOp(CyDecimal left, CyDecimal right, Func<decimal, decimal, bool> op)
         => op(left.DecryptValue(), right.DecryptValue());
+
+    private static bool ConstantTimeEquals(CyDecimal left, CyDecimal right)
+        => ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
 }

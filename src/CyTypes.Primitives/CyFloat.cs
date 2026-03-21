@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -15,6 +16,14 @@ public sealed partial class CyFloat : CyTypeBase<CyFloat, float>, ICyNumeric<CyF
 
     /// <summary>Initializes a new <see cref="CyFloat"/> by encrypting the specified value.</summary>
     public CyFloat(float value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyFloat"/> by cloning encrypted data without decryption.</summary>
+    internal CyFloat(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyFloat CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <summary>Serializes a float value to its byte representation.</summary>
     protected override byte[] SerializeValue(float value) => BitConverter.GetBytes(value);

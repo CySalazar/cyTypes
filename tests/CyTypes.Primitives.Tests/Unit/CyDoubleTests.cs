@@ -175,4 +175,48 @@ public sealed class CyDoubleTests
 
     [Fact]
     public void Modulo_operator() { using var a = new CyDouble(10.0); using var b = new CyDouble(3.0); using var c = a % b; c.ToInsecureDouble().Should().Be(1.0); }
+
+    [Fact]
+    public void UnaryPlus_ReturnsNewInstanceWithSameValue()
+    {
+        using var a = new CyDouble(3.14);
+        using var b = +a;
+        b.ToInsecureDouble().Should().Be(3.14);
+        b.InstanceId.Should().NotBe(a.InstanceId);
+    }
+
+    [Fact]
+    public void UnaryMinus_ReturnsNegatedValue()
+    {
+        using var a = new CyDouble(3.14);
+        using var b = -a;
+        b.ToInsecureDouble().Should().Be(-3.14);
+    }
+
+    [Fact]
+    public void Increment_ReturnsValuePlusOne()
+    {
+        var a = new CyDouble(10.0);
+        using var b = ++a;
+        b.ToInsecureDouble().Should().Be(11.0);
+    }
+
+    [Fact]
+    public void Decrement_ReturnsValueMinusOne()
+    {
+        var a = new CyDouble(10.0);
+        using var b = --a;
+        b.ToInsecureDouble().Should().Be(9.0);
+    }
+
+    [Fact]
+    public void UnaryOperators_PropagateTaint()
+    {
+        using var a = new CyDouble(5.0);
+        a.MarkTainted();
+        using var pos = +a;
+        using var neg = -a;
+        pos.IsTainted.Should().BeTrue();
+        neg.IsTainted.Should().BeTrue();
+    }
 }

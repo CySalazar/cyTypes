@@ -165,6 +165,17 @@ public sealed class KeyManager : IKeyManager
         Interlocked.Increment(ref _usageCount);
     }
 
+    /// <summary>
+    /// Creates a new <see cref="KeyManager"/> with a copy of the current key material.
+    /// The cloned manager has its own independent key buffer and lifecycle.
+    /// </summary>
+    public KeyManager Clone()
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) != 0, this);
+        CheckTtl();
+        return new KeyManager(_keyBuffer.AsReadOnlySpan());
+    }
+
     private void CheckTtl()
     {
         if (_ttl.HasValue)

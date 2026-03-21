@@ -368,4 +368,132 @@ public sealed class CyListTests
         var act = () => list.CopyTo(new CyInt[1], 0);
         act.Should().Throw<ObjectDisposedException>();
     }
+
+    [Fact]
+    public void AddRange_AddsAllItems()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        using var b = new CyInt(2);
+        using var c = new CyInt(3);
+
+        list.AddRange([a, b, c]);
+
+        list.Count.Should().Be(3);
+        list[0].Should().BeSameAs(a);
+        list[1].Should().BeSameAs(b);
+        list[2].Should().BeSameAs(c);
+    }
+
+    [Fact]
+    public void RemoveAll_RemovesMatchingAndDisposesAndReturnsCount()
+    {
+        using var list = new CyList<CyInt>();
+        var a = new CyInt(1);
+        var b = new CyInt(10);
+        var c = new CyInt(2);
+        list.Add(a);
+        list.Add(b);
+        list.Add(c);
+
+        int removed = list.RemoveAll(x => x.ToInsecureInt() > 5);
+
+        removed.Should().Be(1);
+        list.Count.Should().Be(2);
+        b.IsDisposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Sort_OrdersElements()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(30);
+        using var b = new CyInt(10);
+        using var c = new CyInt(20);
+        list.Add(a);
+        list.Add(b);
+        list.Add(c);
+
+        list.Sort((x, y) => x.ToInsecureInt().CompareTo(y.ToInsecureInt()));
+
+        list[0].ToInsecureInt().Should().Be(10);
+        list[1].ToInsecureInt().Should().Be(20);
+        list[2].ToInsecureInt().Should().Be(30);
+    }
+
+    [Fact]
+    public void FindAll_ReturnsMatchingAsNewList()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        using var b = new CyInt(10);
+        using var c = new CyInt(2);
+        list.Add(a);
+        list.Add(b);
+        list.Add(c);
+
+        using var found = list.FindAll(x => x.ToInsecureInt() < 5);
+
+        found.Count.Should().Be(2);
+        found[0].Should().BeSameAs(a);
+        found[1].Should().BeSameAs(c);
+    }
+
+    [Fact]
+    public void ForEach_ExecutesOnAllElements()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        using var b = new CyInt(2);
+        list.Add(a);
+        list.Add(b);
+
+        var values = new List<int>();
+        list.ForEach(x => values.Add(x.ToInsecureInt()));
+
+        values.Should().BeEquivalentTo([1, 2]);
+    }
+
+    [Fact]
+    public void DetachAt_RemovesWithoutDisposing()
+    {
+        using var list = new CyList<CyInt>();
+        var item = new CyInt(42);
+        list.Add(item);
+
+        var detached = list.DetachAt(0);
+
+        list.Count.Should().Be(0);
+        detached.IsDisposed.Should().BeFalse();
+        detached.ToInsecureInt().Should().Be(42);
+        detached.Dispose();
+    }
+
+    [Fact]
+    public void Indexer_Set_DisposesOldValue()
+    {
+        using var list = new CyList<CyInt>();
+        var old = new CyInt(1);
+        using var replacement = new CyInt(2);
+        list.Add(old);
+
+        list[0] = replacement;
+
+        old.IsDisposed.Should().BeTrue();
+        list[0].Should().BeSameAs(replacement);
+    }
+
+    [Fact]
+    public void ToCyList_CreatesListFromEnumerable()
+    {
+        using var a = new CyInt(1);
+        using var b = new CyInt(2);
+        var items = new[] { a, b };
+
+        using var list = items.ToCyList();
+
+        list.Count.Should().Be(2);
+        list[0].Should().BeSameAs(a);
+        list[1].Should().BeSameAs(b);
+    }
 }

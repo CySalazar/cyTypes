@@ -123,4 +123,48 @@ public sealed class CyDecimalTests
         (null == a).Should().BeFalse();
         ((CyDecimal?)null == null).Should().BeTrue();
     }
+
+    [Fact]
+    public void UnaryPlus_ReturnsNewInstanceWithSameValue()
+    {
+        using var a = new CyDecimal(42.5m);
+        using var b = +a;
+        b.ToInsecureDecimal().Should().Be(42.5m);
+        b.InstanceId.Should().NotBe(a.InstanceId);
+    }
+
+    [Fact]
+    public void UnaryMinus_ReturnsNegatedValue()
+    {
+        using var a = new CyDecimal(42.5m);
+        using var b = -a;
+        b.ToInsecureDecimal().Should().Be(-42.5m);
+    }
+
+    [Fact]
+    public void Increment_ReturnsValuePlusOne()
+    {
+        var a = new CyDecimal(10m);
+        using var b = ++a;
+        b.ToInsecureDecimal().Should().Be(11m);
+    }
+
+    [Fact]
+    public void Decrement_ReturnsValueMinusOne()
+    {
+        var a = new CyDecimal(10m);
+        using var b = --a;
+        b.ToInsecureDecimal().Should().Be(9m);
+    }
+
+    [Fact]
+    public void UnaryOperators_PropagateTaint()
+    {
+        using var a = new CyDecimal(5m);
+        a.MarkTainted();
+        using var pos = +a;
+        using var neg = -a;
+        pos.IsTainted.Should().BeTrue();
+        neg.IsTainted.Should().BeTrue();
+    }
 }

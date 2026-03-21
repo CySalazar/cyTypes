@@ -1,3 +1,5 @@
+using CyTypes.Primitives.Shared;
+
 namespace CyTypes.Primitives;
 
 public sealed partial class CyDateTime
@@ -12,7 +14,7 @@ public sealed partial class CyDateTime
     {
         if (left is null && right is null) return true;
         if (left is null || right is null) return false;
-        return CompareOp(left, right, (a, b) => a == b);
+        return ConstantTimeEquals(left, right);
     }
     /// <summary>Determines whether two <see cref="CyDateTime"/> instances are not equal.</summary>
     public static bool operator !=(CyDateTime? left, CyDateTime? right) => !(left == right);
@@ -29,9 +31,16 @@ public sealed partial class CyDateTime
     public bool Equals(CyDateTime? other) => other is not null && this == other;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyDateTime);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     private static bool CompareOp(CyDateTime left, CyDateTime right, Func<DateTime, DateTime, bool> op)
         => op(left.DecryptValue(), right.DecryptValue());
+
+    private static bool ConstantTimeEquals(CyDateTime left, CyDateTime right)
+        => ConstantTimeCompare.Equals(left.DecryptValue().Ticks, right.DecryptValue().Ticks);
 }

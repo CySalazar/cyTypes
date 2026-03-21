@@ -1,4 +1,5 @@
 using CyTypes.Core.Crypto;
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -24,6 +25,17 @@ public sealed class CyBytes : CyTypeBase<CyBytes, byte[]>, IEquatable<CyBytes>, 
         Length = value.Length;
     }
 
+    /// <summary>Initializes a new <see cref="CyBytes"/> by cloning encrypted data without decryption.</summary>
+    internal CyBytes(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager, int length)
+        : base(encryptedBytes, policy, clonedKeyManager)
+    {
+        Length = length;
+    }
+
+    /// <inheritdoc/>
+    protected override CyBytes CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager, Length);
+
     /// <inheritdoc/>
     protected override byte[] SerializeValue(byte[] value) => (byte[])value.Clone();
     /// <inheritdoc/>
@@ -48,7 +60,11 @@ public sealed class CyBytes : CyTypeBase<CyBytes, byte[]>, IEquatable<CyBytes>, 
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyBytes);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     /// <summary>Determines whether two CyBytes instances have equal content.</summary>

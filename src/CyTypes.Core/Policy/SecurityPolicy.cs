@@ -59,6 +59,12 @@ public sealed class SecurityPolicy
     /// <summary>Gets the stream integrity verification mode.</summary>
     public StreamIntegrityMode StreamIntegrity { get; }
 
+    /// <summary>Gets the formatting mode controlling whether IFormattable exposes plaintext.</summary>
+    public FormattingMode Formatting { get; }
+
+    /// <summary>Gets the character access mode controlling CyString indexer behavior.</summary>
+    public CharAccessMode CharAccess { get; }
+
     internal SecurityPolicy(
         string name,
         ArithmeticMode arithmetic,
@@ -76,7 +82,9 @@ public sealed class SecurityPolicy
         OverflowMode overflow = OverflowMode.Unchecked,
         int streamChunkSize = 65536,
         bool requireKeyExchange = true,
-        StreamIntegrityMode streamIntegrity = StreamIntegrityMode.PerChunkPlusFooter)
+        StreamIntegrityMode streamIntegrity = StreamIntegrityMode.PerChunkPlusFooter,
+        FormattingMode formatting = FormattingMode.Redacted,
+        CharAccessMode charAccess = CharAccessMode.CompromiseOnAccess)
     {
         Name = name;
         Arithmetic = arithmetic;
@@ -95,6 +103,8 @@ public sealed class SecurityPolicy
         StreamChunkSize = streamChunkSize;
         RequireKeyExchange = requireKeyExchange;
         StreamIntegrity = streamIntegrity;
+        Formatting = formatting;
+        CharAccess = charAccess;
     }
 
     /// <summary>

@@ -31,6 +31,10 @@ public static class CyTypesServiceCollectionExtensions
         services.TryAddSingleton<ICryptoEngine, AesGcmEngine>();
         services.TryAddSingleton<SecurityAuditor>();
 
+        // Secure buffer pool
+        services.TryAddSingleton(new CyTypes.Core.Memory.SecureBufferPool(
+            options.SecureBufferPoolSize > 0 ? options.SecureBufferPoolSize : 4096));
+
         // Audit sinks — collect all registered IAuditSink implementations
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuditSink, LoggingAuditSink>());
 

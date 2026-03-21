@@ -18,6 +18,8 @@ public sealed class CyTypesAnalyzer : DiagnosticAnalyzer
     public const string DiagnosticIdFireAndForgetCast = "CY0003";
     /// <summary>Diagnostic ID for CyType variables that are not disposed.</summary>
     public const string DiagnosticIdMissingDispose = "CY0004";
+    /// <summary>Diagnostic ID for CyType used as dictionary key or hash set element.</summary>
+    public const string DiagnosticIdIdentityHashCode = "CY0005";
 
     private const string Category = "Security";
     private const string CyTypeBaseTypeName = "CyTypeBase";
@@ -55,9 +57,17 @@ public sealed class CyTypesAnalyzer : DiagnosticAnalyzer
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor RuleIdentityHashCode = new(
+        DiagnosticIdIdentityHashCode,
+        "CyType used as dictionary key or HashSet element",
+        "CyType '{0}' uses identity-based GetHashCode(). Two instances with the same encrypted value will have different hash codes.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     /// <summary>Gets the set of diagnostic descriptors this analyzer can produce.</summary>
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        ImmutableArray.Create(RuleInsecureAccess, RuleStringInterpolation, RuleFireAndForgetCast, RuleMissingDispose);
+        ImmutableArray.Create(RuleInsecureAccess, RuleStringInterpolation, RuleFireAndForgetCast, RuleMissingDispose, RuleIdentityHashCode);
 
     /// <summary>Registers syntax node actions for detecting insecure CyType usage patterns.</summary>
     public override void Initialize(AnalysisContext context)
@@ -69,6 +79,7 @@ public sealed class CyTypesAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeInterpolation, SyntaxKind.Interpolation);
         context.RegisterSyntaxNodeAction(AnalyzeCastExpression, SyntaxKind.CastExpression);
         context.RegisterSyntaxNodeAction(AnalyzeLocalDeclaration, SyntaxKind.LocalDeclarationStatement);
+        context.RegisterSyntaxNodeAction(AnalyzeGenericName, SyntaxKind.GenericName);
     }
 
     private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -171,6 +182,30 @@ public sealed class CyTypesAnalyzer : DiagnosticAnalyzer
                 context.ReportDiagnostic(Diagnostic.Create(
                     RuleMissingDispose, variable.Identifier.GetLocation(), local.Type.Name));
             }
+        }
+    }
+
+    private static void AnalyzeGenericName(SyntaxNodeAnalysisContext context)
+    {
+        var genericName = (GenericNameSyntax)context.Node;
+        var name = genericName.Identifier.Text;
+
+        // Check for Dictionary<CyType, ...> or HashSet<CyType>
+        if (name is not ("Dictionary" or "HashSet" or "ConcurrentDictionary"))
+            return;
+
+        var typeArgs = genericName.TypeArgumentList.Arguments;
+        if (typeArgs.Count == 0) return;
+
+        // For Dictionary/ConcurrentDictionary, check the first type argument (the key)
+        // For HashSet, check the first (only) type argument
+        var targetArg = typeArgs[0];
+        var typeInfo = context.SemanticModel.GetTypeInfo(targetArg);
+
+        if (typeInfo.Type != null && IsCyType(typeInfo.Type))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                RuleIdentityHashCode, targetArg.GetLocation(), typeInfo.Type.Name));
         }
     }
 

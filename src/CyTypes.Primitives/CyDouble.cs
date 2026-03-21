@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -15,6 +16,14 @@ public sealed partial class CyDouble : CyTypeBase<CyDouble, double>, ICyNumeric<
 
     /// <summary>Initializes a new <see cref="CyDouble"/> by encrypting the specified value.</summary>
     public CyDouble(double value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyDouble"/> by cloning encrypted data without decryption.</summary>
+    internal CyDouble(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyDouble CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <summary>Serializes a double value to its byte representation.</summary>
     protected override byte[] SerializeValue(double value) => BitConverter.GetBytes(value);

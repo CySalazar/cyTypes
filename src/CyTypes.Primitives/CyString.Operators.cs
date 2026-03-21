@@ -89,14 +89,19 @@ public sealed partial class CyString
     }
 
     /// <summary>
-    /// Character indexer. SECURITY: marks the instance as compromised since it exposes plaintext.
+    /// Character indexer. Security behavior depends on <see cref="CyTypes.Core.Policy.Components.CharAccessMode"/>:
+    /// <see cref="CyTypes.Core.Policy.Components.CharAccessMode.CompromiseOnAccess"/> marks compromise,
+    /// <see cref="CyTypes.Core.Policy.Components.CharAccessMode.TaintOnAccess"/> marks taint only.
     /// </summary>
     public char this[int index]
     {
         get
         {
+            if (Policy.CharAccess == CyTypes.Core.Policy.Components.CharAccessMode.TaintOnAccess)
+                MarkTainted();
+            else
+                MarkCompromised();
             var plain = DecryptValue();
-            MarkCompromised();
             return plain[index];
         }
     }
@@ -105,6 +110,10 @@ public sealed partial class CyString
     public bool Equals(CyString? other) => other is not null && this == other;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyString);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 }

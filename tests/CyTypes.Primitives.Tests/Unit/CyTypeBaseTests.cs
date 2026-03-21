@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Core.Security;
 using CyTypes.Primitives;
@@ -10,8 +11,12 @@ namespace CyTypes.Primitives.Tests.Unit;
 internal sealed class TestCyType : CyTypeBase<TestCyType, int>
 {
     public TestCyType(int value, SecurityPolicy? policy = null) : base(value, policy) { }
+    internal TestCyType(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
     protected override byte[] SerializeValue(int value) => BitConverter.GetBytes(value);
     protected override int DeserializeValue(byte[] data) => BitConverter.ToInt32(data);
+    protected override TestCyType CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <summary>Expose DecryptValue for testing.</summary>
     public int GetValue() => DecryptValue();
@@ -437,6 +442,68 @@ public sealed class CyTypeBaseAdditionalTests
         var ct = new TestCyType(1);
         ct.Dispose();
         var act = () => ct.RotateKeyAndReEncrypt();
+        act.Should().Throw<ObjectDisposedException>();
+    }
+}
+
+public sealed class CloneTests
+{
+    [Fact]
+    public void Clone_ReturnsNewInstanceWithSameDecryptedValue()
+    {
+        using var original = new TestCyType(42);
+        using var clone = original.Clone();
+
+        clone.GetValue().Should().Be(42);
+    }
+
+    [Fact]
+    public void Clone_HasDifferentInstanceId()
+    {
+        using var original = new TestCyType(42);
+        using var clone = original.Clone();
+
+        clone.InstanceId.Should().NotBe(original.InstanceId);
+    }
+
+    [Fact]
+    public void Clone_DoesNotMarkCompromised()
+    {
+        using var original = new TestCyType(42);
+        using var clone = original.Clone();
+
+        original.IsCompromised.Should().BeFalse();
+        clone.IsCompromised.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Clone_PreservesPolicy()
+    {
+        using var original = new TestCyType(42, SecurityPolicy.Maximum);
+        using var clone = original.Clone();
+
+        clone.Policy.Should().BeSameAs(SecurityPolicy.Maximum);
+    }
+
+    [Fact]
+    public void Clone_TaintNotPropagated()
+    {
+        using var original = new TestCyType(42);
+        original.MarkTainted();
+
+        using var clone = original.Clone();
+
+        original.IsTainted.Should().BeTrue();
+        clone.IsTainted.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Clone_OnDisposed_Throws()
+    {
+        var ct = new TestCyType(1);
+        ct.Dispose();
+
+        var act = () => ct.Clone();
         act.Should().Throw<ObjectDisposedException>();
     }
 }

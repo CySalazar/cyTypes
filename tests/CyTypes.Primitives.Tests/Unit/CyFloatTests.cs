@@ -167,4 +167,48 @@ public sealed class CyFloatTests
 
     [Fact]
     public void ToString_never_leaks() { using var cy = new CyFloat(3.14f); cy.ToString().Should().Contain("Encrypted"); }
+
+    [Fact]
+    public void UnaryPlus_ReturnsNewInstanceWithSameValue()
+    {
+        using var a = new CyFloat(3.14f);
+        using var b = +a;
+        b.ToInsecureFloat().Should().Be(3.14f);
+        b.InstanceId.Should().NotBe(a.InstanceId);
+    }
+
+    [Fact]
+    public void UnaryMinus_ReturnsNegatedValue()
+    {
+        using var a = new CyFloat(3.14f);
+        using var b = -a;
+        b.ToInsecureFloat().Should().Be(-3.14f);
+    }
+
+    [Fact]
+    public void Increment_ReturnsValuePlusOne()
+    {
+        var a = new CyFloat(10.0f);
+        using var b = ++a;
+        b.ToInsecureFloat().Should().Be(11.0f);
+    }
+
+    [Fact]
+    public void Decrement_ReturnsValueMinusOne()
+    {
+        var a = new CyFloat(10.0f);
+        using var b = --a;
+        b.ToInsecureFloat().Should().Be(9.0f);
+    }
+
+    [Fact]
+    public void UnaryOperators_PropagateTaint()
+    {
+        using var a = new CyFloat(5.0f);
+        a.MarkTainted();
+        using var pos = +a;
+        using var neg = -a;
+        pos.IsTainted.Should().BeTrue();
+        neg.IsTainted.Should().BeTrue();
+    }
 }

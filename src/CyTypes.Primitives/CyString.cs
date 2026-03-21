@@ -1,5 +1,6 @@
 using System.Text;
 using CyTypes.Core.Crypto;
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -22,11 +23,19 @@ public sealed partial class CyString : CyTypeBase<CyString, string>, IEquatable<
     /// <remarks>
     /// SECURITY: This value is not encrypted. It reveals the plaintext string length
     /// to anyone with access to this instance. See class remarks for mitigation.
+    /// For a length value derived from decryption (no metadata leak), see <see cref="SecureLength"/>.
     /// </remarks>
     public int Length { get; }
 
     /// <summary>True if Length is 0.</summary>
     public bool IsEmpty => Length == 0;
+
+    /// <summary>
+    /// Returns the length of the plaintext string by decrypting the value.
+    /// Unlike <see cref="Length"/>, this does not rely on stored metadata.
+    /// Does not mark the instance as compromised (only an int is returned).
+    /// </summary>
+    public int SecureLength => DecryptValue().Length;
 
     /// <summary>Initializes a new CyString by encrypting the specified string value.</summary>
     public CyString(string value, SecurityPolicy? policy = null) : base(value, policy)
@@ -39,6 +48,17 @@ public sealed partial class CyString : CyTypeBase<CyString, string>, IEquatable<
                 nameof(value));
         Length = value.Length;
     }
+
+    /// <summary>Initializes a new <see cref="CyString"/> by cloning encrypted data without decryption.</summary>
+    internal CyString(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager, int length)
+        : base(encryptedBytes, policy, clonedKeyManager)
+    {
+        Length = length;
+    }
+
+    /// <inheritdoc/>
+    protected override CyString CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager, Length);
 
     /// <inheritdoc/>
     protected override byte[] SerializeValue(string value) => Encoding.UTF8.GetBytes(value);
@@ -62,11 +82,15 @@ public sealed partial class CyString : CyTypeBase<CyString, string>, IEquatable<
     }
 
     /// <summary>Returns true if the specified CyString is null, empty, or contains only whitespace.</summary>
+    /// <remarks>
+    /// SECURITY: Decrypts the value internally but does not mark the instance as compromised,
+    /// because only a boolean result is returned — no plaintext escapes the enclave.
+    /// This is consistent with other query methods (Contains, StartsWith, etc.).
+    /// </remarks>
     public static bool IsNullOrWhiteSpace(CyString? value)
     {
         if (value is null) return true;
         if (value.IsEmpty) return true;
-        // SECURITY: Must decrypt to check whitespace — but don't mark compromise
         var plain = value.DecryptValue();
         return string.IsNullOrWhiteSpace(plain);
     }

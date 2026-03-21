@@ -335,4 +335,65 @@ public sealed class CyIntOperatorTests
 
         act.Should().Throw<OverflowException>();
     }
+
+    [Fact]
+    public void UnaryPlus_ReturnsNewInstanceWithSameValue()
+    {
+        using var a = new CyInt(42);
+        using var b = +a;
+
+        b.ToInsecureInt().Should().Be(42);
+        b.InstanceId.Should().NotBe(a.InstanceId);
+    }
+
+    [Fact]
+    public void UnaryMinus_ReturnsNegatedValue()
+    {
+        using var a = new CyInt(42);
+        using var b = -a;
+
+        b.ToInsecureInt().Should().Be(-42);
+    }
+
+    [Fact]
+    public void Increment_ReturnsValuePlusOne()
+    {
+        var a = new CyInt(10);
+        using var b = ++a;
+
+        b.ToInsecureInt().Should().Be(11);
+    }
+
+    [Fact]
+    public void Decrement_ReturnsValueMinusOne()
+    {
+        var a = new CyInt(10);
+        using var b = --a;
+
+        b.ToInsecureInt().Should().Be(9);
+    }
+
+    [Fact]
+    public void UnaryOperators_PropagateTaint()
+    {
+        using var a = new CyInt(5);
+        a.MarkTainted();
+
+        using var pos = +a;
+        using var neg = -a;
+
+        pos.IsTainted.Should().BeTrue();
+        neg.IsTainted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UnaryOperators_PropagateCompromiseAsTaint()
+    {
+        using var a = new CyInt(5);
+        _ = a.ToInsecureInt(); // compromise
+
+        using var pos = +a;
+
+        pos.IsTainted.Should().BeTrue();
+    }
 }

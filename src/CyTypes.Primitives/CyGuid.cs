@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives.Shared;
 
@@ -11,6 +12,14 @@ public sealed class CyGuid : CyTypeBase<CyGuid, Guid>, IEquatable<CyGuid>, IComp
 {
     /// <summary>Initializes a new <see cref="CyGuid"/> by encrypting the specified GUID.</summary>
     public CyGuid(Guid value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyGuid"/> by cloning encrypted data without decryption.</summary>
+    internal CyGuid(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyGuid CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <inheritdoc/>
     protected override byte[] SerializeValue(Guid value) => value.ToByteArray();
@@ -36,7 +45,11 @@ public sealed class CyGuid : CyTypeBase<CyGuid, Guid>, IEquatable<CyGuid>, IComp
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyGuid);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     /// <summary>Determines whether two CyGuid instances are equal.</summary>

@@ -60,6 +60,48 @@ public sealed partial class CyInt
         return BinaryOp(left, right, (a, b) => a % b, (a, b) => checked(a % b), FheOp.None);
     }
 
+    // === Unary Operators ===
+
+    /// <summary>Returns a new <see cref="CyInt"/> with the same value (unary plus / identity).</summary>
+    public static CyInt operator +(CyInt value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyInt(val, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Negates the specified <see cref="CyInt"/> value.</summary>
+    public static CyInt operator -(CyInt value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyInt(-val, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Increments the specified <see cref="CyInt"/> value by one.</summary>
+    public static CyInt operator ++(CyInt value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyInt(val + 1, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
+    /// <summary>Decrements the specified <see cref="CyInt"/> value by one.</summary>
+    public static CyInt operator --(CyInt value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var val = value.DecryptValue();
+        var result = new CyInt(val - 1, value.Policy);
+        if (value.IsCompromised || value.IsTainted) result.MarkTainted();
+        return result;
+    }
+
     // === Comparison Operators ===
 
     /// <summary>Determines whether two <see cref="CyInt"/> instances are equal.</summary>
@@ -67,7 +109,7 @@ public sealed partial class CyInt
     {
         if (left is null && right is null) return true;
         if (left is null || right is null) return false;
-        return CompareOp(left, right, (a, b) => a == b);
+        return ConstantTimeEquals(left, right);
     }
 
     /// <summary>Determines whether two <see cref="CyInt"/> instances are not equal.</summary>
@@ -109,7 +151,11 @@ public sealed partial class CyInt
     public bool Equals(CyInt? other) => other is not null && this == other;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CyInt);
-    /// <inheritdoc/>
+    /// <summary>
+    /// Returns a hash code based on this instance's unique identity (InstanceId), NOT on the encrypted value.
+    /// Two instances with the same plaintext will have different hash codes.
+    /// Do not use CyType instances as dictionary keys or HashSet elements.
+    /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
     // === Bitwise Operators ===
@@ -245,5 +291,13 @@ public sealed partial class CyInt
         var leftVal = left.DecryptValue();
         var rightVal = right.DecryptValue();
         return op(leftVal, rightVal);
+    }
+
+    // SECURITY: Constant-time equality to prevent timing side-channel attacks
+    private static bool ConstantTimeEquals(CyInt left, CyInt right)
+    {
+        var leftVal = left.DecryptValue();
+        var rightVal = right.DecryptValue();
+        return ConstantTimeCompare.Equals(leftVal, rightVal);
     }
 }

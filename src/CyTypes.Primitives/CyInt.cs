@@ -1,3 +1,4 @@
+using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
 using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
@@ -18,6 +19,14 @@ public sealed partial class CyInt : CyTypeBase<CyInt, int>, ICyNumeric<CyInt>, I
 
     /// <summary>Initializes a new <see cref="CyInt"/> from pre-existing FHE ciphertext bytes.</summary>
     internal CyInt(byte[] fheCiphertext, SecurityPolicy policy) : base(fheCiphertext, policy, default(FheCiphertextTag)) { }
+
+    /// <summary>Initializes a new <see cref="CyInt"/> by cloning encrypted data without decryption.</summary>
+    internal CyInt(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        : base(encryptedBytes, policy, clonedKeyManager) { }
+
+    /// <inheritdoc/>
+    protected override CyInt CreateClone(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
+        => new(encryptedBytes, policy, clonedKeyManager);
 
     /// <summary>Serializes an int value to its byte representation.</summary>
     protected override byte[] SerializeValue(int value) => BitConverter.GetBytes(value);

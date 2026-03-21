@@ -155,4 +155,48 @@ public sealed class CyLongTests
         var act = () => cy.ToInsecureLong();
         act.Should().Throw<ObjectDisposedException>();
     }
+
+    [Fact]
+    public void UnaryPlus_ReturnsNewInstanceWithSameValue()
+    {
+        using var a = new CyLong(42L);
+        using var b = +a;
+        b.ToInsecureLong().Should().Be(42L);
+        b.InstanceId.Should().NotBe(a.InstanceId);
+    }
+
+    [Fact]
+    public void UnaryMinus_ReturnsNegatedValue()
+    {
+        using var a = new CyLong(42L);
+        using var b = -a;
+        b.ToInsecureLong().Should().Be(-42L);
+    }
+
+    [Fact]
+    public void Increment_ReturnsValuePlusOne()
+    {
+        var a = new CyLong(10L);
+        using var b = ++a;
+        b.ToInsecureLong().Should().Be(11L);
+    }
+
+    [Fact]
+    public void Decrement_ReturnsValueMinusOne()
+    {
+        var a = new CyLong(10L);
+        using var b = --a;
+        b.ToInsecureLong().Should().Be(9L);
+    }
+
+    [Fact]
+    public void UnaryOperators_PropagateTaint()
+    {
+        using var a = new CyLong(5L);
+        a.MarkTainted();
+        using var pos = +a;
+        using var neg = -a;
+        pos.IsTainted.Should().BeTrue();
+        neg.IsTainted.Should().BeTrue();
+    }
 }

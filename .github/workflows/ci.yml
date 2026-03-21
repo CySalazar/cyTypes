@@ -29,7 +29,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0"
+          dotnet-version: |
+            8.0.x
+            9.0.x
 
       - name: Restore
         run: dotnet restore cyTypes.sln
@@ -91,7 +93,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0"
+          dotnet-version: |
+            8.0.x
+            9.0.x
 
       - name: Restore and Build
         run: dotnet build cyTypes.sln -c Release
@@ -121,7 +125,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0"
+          dotnet-version: |
+            8.0.x
+            9.0.x
 
       - name: Build
         run: dotnet build cyTypes.sln -c Release

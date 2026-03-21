@@ -207,4 +207,80 @@ public sealed class CyTypesAnalyzerTests
         test.TestBehaviors = TestBehaviors.SkipGeneratedCodeCheck;
         await test.RunAsync();
     }
+
+    [Fact]
+    public async Task CY0005_DictionaryWithCyTypeKey_ReportsWarning()
+    {
+        var test = new AnalyzerTest
+        {
+            TestCode = CyTypeStubs + """
+
+                class Test
+                {
+                    void Run()
+                    {
+                        var d = new System.Collections.Generic.Dictionary<{|#0:CyTypes.Primitives.CyInt|}, string>();
+                    }
+                }
+                """,
+            ExpectedDiagnostics =
+            {
+                new DiagnosticResult(CyTypesAnalyzer.DiagnosticIdIdentityHashCode, DiagnosticSeverity.Warning)
+                    .WithLocation(0)
+                    .WithArguments("CyInt"),
+            },
+        };
+
+        test.TestBehaviors = TestBehaviors.SkipGeneratedCodeCheck;
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task CY0005_HashSetWithCyType_ReportsWarning()
+    {
+        var test = new AnalyzerTest
+        {
+            TestCode = CyTypeStubs + """
+
+                class Test
+                {
+                    void Run()
+                    {
+                        var s = new System.Collections.Generic.HashSet<{|#0:CyTypes.Primitives.CyInt|}>();
+                    }
+                }
+                """,
+            ExpectedDiagnostics =
+            {
+                new DiagnosticResult(CyTypesAnalyzer.DiagnosticIdIdentityHashCode, DiagnosticSeverity.Warning)
+                    .WithLocation(0)
+                    .WithArguments("CyInt"),
+            },
+        };
+
+        test.TestBehaviors = TestBehaviors.SkipGeneratedCodeCheck;
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task CY0005_DictionaryWithCyTypeValue_NoWarning()
+    {
+        var test = new AnalyzerTest
+        {
+            TestCode = CyTypeStubs + """
+
+                class Test
+                {
+                    void Run()
+                    {
+                        var d = new System.Collections.Generic.Dictionary<string, CyTypes.Primitives.CyInt>();
+                    }
+                }
+                """,
+            ExpectedDiagnostics = { },
+        };
+
+        test.TestBehaviors = TestBehaviors.SkipGeneratedCodeCheck;
+        await test.RunAsync();
+    }
 }

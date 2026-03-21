@@ -1,3 +1,4 @@
+using System.Globalization;
 using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy.Components;
 
@@ -55,6 +56,9 @@ public static class PolicyResolver
         var keyStoreCap = (KeyStoreCapability)Math.Min((int)left.KeyStoreMinimumCapability, (int)right.KeyStoreMinimumCapability);
         // OverflowMode: use safer (Checked wins over Unchecked)
         var overflow = (OverflowMode)Math.Min((int)left.Overflow, (int)right.Overflow);
+        // FormattingMode: more restrictive (Redacted) wins
+        var formatting = (FormattingMode)Math.Min((int)left.Formatting, (int)right.Formatting);
+        var charAccess = (CharAccessMode)Math.Min((int)left.CharAccess, (int)right.CharAccess);
 
         return new SecurityPolicy(
             name: $"Resolved({left.Name}+{right.Name})",
@@ -70,7 +74,50 @@ public static class PolicyResolver
             allowDemotion: allowDemotion,
             decryptionRateLimit: rateLimit,
             keyStoreMinimumCapability: keyStoreCap,
-            overflow: overflow);
+            overflow: overflow,
+            formatting: formatting,
+            charAccess: charAccess);
+    }
+
+    /// <summary>
+    /// Resolves two policies and returns a detailed explanation of how each component was resolved.
+    /// Useful for diagnostics and debugging policy interactions.
+    /// </summary>
+    public static PolicyResolutionExplanation Explain(SecurityPolicy left, SecurityPolicy right, bool allowStrictCrossPolicy = false)
+    {
+        var resolved = Resolve(left, right, allowStrictCrossPolicy);
+        var components = new List<ComponentResolution>
+        {
+            new("Arithmetic", left.Arithmetic.ToString(), right.Arithmetic.ToString(),
+                resolved.Arithmetic.ToString(), "Higher security (lower ordinal) wins"),
+            new("Comparison", left.Comparison.ToString(), right.Comparison.ToString(),
+                resolved.Comparison.ToString(), "Higher security (lower ordinal) wins"),
+            new("StringOperations", left.StringOperations.ToString(), right.StringOperations.ToString(),
+                resolved.StringOperations.ToString(), "Higher security (lower ordinal) wins"),
+            new("Memory", left.Memory.ToString(), right.Memory.ToString(),
+                resolved.Memory.ToString(), "Stronger protection (lower ordinal) wins"),
+            new("Taint", left.Taint.ToString(), right.Taint.ToString(),
+                resolved.Taint.ToString(), "Stricter taint mode wins"),
+            new("Audit", left.Audit.ToString(), right.Audit.ToString(),
+                resolved.Audit.ToString(), "More verbose audit level wins"),
+            new("KeyRotation", left.KeyRotation.ToString(), right.KeyRotation.ToString(),
+                resolved.KeyRotation.ToString(), "More frequent rotation wins"),
+            new("MaxDecryptionCount", left.MaxDecryptionCount.ToString(CultureInfo.InvariantCulture), right.MaxDecryptionCount.ToString(CultureInfo.InvariantCulture),
+                resolved.MaxDecryptionCount.ToString(CultureInfo.InvariantCulture), "Lower (more restrictive) count wins"),
+            new("AutoDestroy", left.AutoDestroy.ToString(), right.AutoDestroy.ToString(),
+                resolved.AutoDestroy.ToString(), "True (more restrictive) wins if either is true"),
+            new("AllowDemotion", left.AllowDemotion.ToString(), right.AllowDemotion.ToString(),
+                resolved.AllowDemotion.ToString(), "True (more permissive) wins if either allows"),
+            new("DecryptionRateLimit",
+                left.DecryptionRateLimit?.ToString(CultureInfo.InvariantCulture) ?? "unlimited",
+                right.DecryptionRateLimit?.ToString(CultureInfo.InvariantCulture) ?? "unlimited",
+                resolved.DecryptionRateLimit?.ToString(CultureInfo.InvariantCulture) ?? "unlimited",
+                "Lower (more restrictive) limit wins"),
+            new("Overflow", left.Overflow.ToString(), right.Overflow.ToString(),
+                resolved.Overflow.ToString(), "Checked (safer) wins over Unchecked"),
+        };
+
+        return new PolicyResolutionExplanation(resolved.Name, components);
     }
 
     // Rule 1: Higher security = lower enum ordinal (HomomorphicFull < HomomorphicBasic < SecureEnclave)

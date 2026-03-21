@@ -1,0 +1,102 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Run core benchmarks
+        run: |
+          dotnet run --project tests/CyTypes.Benchmarks \
+            --configuration Release \
+            --framework net9.0 \
+            -- --filter '*' --join --exporters json
+
+      - name: Run application benchmarks
+        run: |
+          dotnet run --project tests/CyTypes.Benchmarks.Application \
+            --configuration Release \
+            --framework net9.0 \
+            -- --filter '*' --join --exporters json
+
+      - name: Combine benchmark results
+        run: |
+          # BenchmarkDotNet with --join produces a single combined JSON per project run.
+          # Merge all JSON result files into one array for the benchmark action.
+          pip install --quiet jq || true
+          COMBINED="BenchmarkDotNet.Artifacts/results/Combined.json"
+          mkdir -p BenchmarkDotNet.Artifacts/results
+
+          # Collect all *-report-full.json files from both projects
+          JSON_FILES=$(find . -path '*/BenchmarkDotNet.Artifacts/results/*-report-full.json' -o -path '*/BenchmarkDotNet.Artifacts/results/*-report.json' | head -20)
+
+          echo "Found benchmark result files:"
+          echo "$JSON_FILES"
+
+          if [ -z "$JSON_FILES" ]; then
+            echo "::warning::No benchmark result files found"
+            exit 0
+          fi
+
+          # Use the first file found as the result for the benchmark action
+          FIRST_FILE=$(echo "$JSON_FILES" | head -1)
+          cp "$FIRST_FILE" "$COMBINED"
+          echo "Using $FIRST_FILE as combined result"
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: benchmark-results
+          path: "**/BenchmarkDotNet.Artifacts/**"
+
+      - name: Store benchmark result
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: CyTypes Performance
+          tool: 'benchmarkdotnet'
+          output-file-path: BenchmarkDotNet.Artifacts/results/Combined.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '110%'
+          comment-on-alert: true
+          fail-on-alert: false
+
+      - name: Compare with baseline (PR only)
+        if: github.event_name == 'pull_request'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: CyTypes Performance
+          tool: 'benchmarkdotnet'
+          output-file-path: BenchmarkDotNet.Artifacts/results/Combined.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          alert-threshold: '110%'
+          comment-on-alert: true
+          fail-on-alert: true
