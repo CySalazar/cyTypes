@@ -1,3 +1,4 @@
+using System.Globalization;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives;
 using FluentAssertions;
@@ -81,5 +82,77 @@ public sealed class CyLongTests
     {
         using var cy = new CyLong(42L);
         cy.ToString().Should().Contain("Encrypted").And.NotContain("42");
+    }
+
+    [Fact]
+    public void Parse_string_creates_correct_value()
+    {
+        using var cy = CyLong.Parse("12345", CultureInfo.InvariantCulture);
+        cy.ToInsecureLong().Should().Be(12345L);
+    }
+
+    [Fact]
+    public void Parse_span_creates_correct_value()
+    {
+        using var cy = CyLong.Parse("12345".AsSpan(), CultureInfo.InvariantCulture);
+        cy.ToInsecureLong().Should().Be(12345L);
+    }
+
+    [Fact]
+    public void TryParse_valid_string_returns_true()
+    {
+        CyLong.TryParse("999", out var result).Should().BeTrue();
+        using (result) { result!.ToInsecureLong().Should().Be(999L); }
+    }
+
+    [Fact]
+    public void TryParse_invalid_string_returns_false()
+    {
+        CyLong.TryParse("abc", out var result).Should().BeFalse();
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryParse_span_valid_returns_true()
+    {
+        CyLong.TryParse("777".AsSpan(), null, out var result).Should().BeTrue();
+        using (result) { result!.ToInsecureLong().Should().Be(777L); }
+    }
+
+    [Fact]
+    public void TryParse_span_invalid_returns_false()
+    {
+        CyLong.TryParse("xyz".AsSpan(), null, out var result).Should().BeFalse();
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void MinValue_returns_long_MinValue()
+    {
+        using var cy = CyLong.MinValue;
+        cy.ToInsecureLong().Should().Be(long.MinValue);
+    }
+
+    [Fact]
+    public void MaxValue_returns_long_MaxValue()
+    {
+        using var cy = CyLong.MaxValue;
+        cy.ToInsecureLong().Should().Be(long.MaxValue);
+    }
+
+    [Fact]
+    public void CompareTo_null_returns_positive()
+    {
+        using var cy = new CyLong(1L);
+        cy.CompareTo(null).Should().BePositive();
+    }
+
+    [Fact]
+    public void Dispose_makes_ToInsecure_throw()
+    {
+        var cy = new CyLong(42L);
+        cy.Dispose();
+        var act = () => cy.ToInsecureLong();
+        act.Should().Throw<ObjectDisposedException>();
     }
 }

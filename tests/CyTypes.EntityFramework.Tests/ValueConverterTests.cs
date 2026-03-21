@@ -109,4 +109,90 @@ public sealed class ValueConverterTests
         var result = RoundTrip(new CyBytesValueConverter(), Array.Empty<byte>());
         result.Should().BeEmpty();
     }
+
+    [Fact]
+    public void CyInt_min_value_round_trip()
+    {
+        var result = RoundTrip(new CyIntValueConverter(), int.MinValue);
+        result.Should().Be(int.MinValue);
+    }
+
+    [Fact]
+    public void CyInt_max_value_round_trip()
+    {
+        var result = RoundTrip(new CyIntValueConverter(), int.MaxValue);
+        result.Should().Be(int.MaxValue);
+    }
+
+    [Fact]
+    public void CyLong_min_value_round_trip()
+    {
+        var result = RoundTrip(new CyLongValueConverter(), long.MinValue);
+        result.Should().Be(long.MinValue);
+    }
+
+    [Fact]
+    public void CyLong_max_value_round_trip()
+    {
+        var result = RoundTrip(new CyLongValueConverter(), long.MaxValue);
+        result.Should().Be(long.MaxValue);
+    }
+
+    [Fact]
+    public void CyFloat_negative_round_trip()
+    {
+        var result = RoundTrip(new CyFloatValueConverter(), -1.5f);
+        result.Should().Be(-1.5f);
+    }
+
+    [Fact]
+    public void CyDouble_negative_round_trip()
+    {
+        var result = RoundTrip(new CyDoubleValueConverter(), -99.99);
+        result.Should().Be(-99.99);
+    }
+
+    [Fact]
+    public void CyDecimal_zero_round_trip()
+    {
+        var result = RoundTrip(new CyDecimalValueConverter(), 0m);
+        result.Should().Be(0m);
+    }
+
+    [Fact]
+    public void CyGuid_empty_round_trip()
+    {
+        var result = RoundTrip(new CyGuidValueConverter(), Guid.Empty);
+        result.Should().Be(Guid.Empty);
+    }
+
+    [Fact]
+    public void CyDateTime_min_value_round_trip()
+    {
+        var result = RoundTrip(new CyDateTimeValueConverter(), DateTime.MinValue);
+        result.Should().Be(DateTime.MinValue);
+    }
+
+    [Fact]
+    public void CyBytes_large_array_round_trip()
+    {
+        var bytes = new byte[1024];
+        new Random(42).NextBytes(bytes);
+        var result = RoundTrip(new CyBytesValueConverter(), bytes);
+        result.Should().Equal(bytes);
+    }
+
+    [Fact]
+    public void CyString_unicode_round_trip()
+    {
+        var result = RoundTrip(new CyStringValueConverter(), "Ciao mondo! \u00e8\u00e9\u00ea");
+        result.Should().Be("Ciao mondo! \u00e8\u00e9\u00ea");
+    }
+
+    [Fact]
+    public void CyInt_zero_round_trip()
+    {
+        var result = RoundTrip(new CyIntValueConverter(), 0);
+        result.Should().Be(0);
+    }
 }

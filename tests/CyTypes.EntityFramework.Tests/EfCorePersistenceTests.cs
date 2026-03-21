@@ -169,6 +169,45 @@ public sealed class EfCorePersistenceTests : IDisposable
         reloaded.Score.ToInsecureInt().Should().Be(20);
     }
 
+    [Fact]
+    public void Delete_persisted_entity_removes_it()
+    {
+        _db.Entities.Add(new TestEntity
+        {
+            Id = 7,
+            Name = new CyString("toDelete"),
+            Score = new CyInt(0),
+            IsActive = new CyBool(false),
+            Rating = new CyDouble(0),
+            ExternalId = new CyGuid(Guid.Empty)
+        });
+        _db.SaveChanges();
+        _db.ChangeTracker.Clear();
+
+        var entity = _db.Entities.Single(e => e.Id == 7);
+        _db.Entities.Remove(entity);
+        _db.SaveChanges();
+        _db.ChangeTracker.Clear();
+
+        _db.Entities.Any(e => e.Id == 7).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Multiple_entities_round_trip()
+    {
+        _db.Entities.AddRange(
+            new TestEntity { Id = 8, Name = new CyString("a"), Score = new CyInt(1), IsActive = new CyBool(true), Rating = new CyDouble(1.0), ExternalId = new CyGuid(Guid.Empty) },
+            new TestEntity { Id = 9, Name = new CyString("b"), Score = new CyInt(2), IsActive = new CyBool(false), Rating = new CyDouble(2.0), ExternalId = new CyGuid(Guid.Empty) }
+        );
+        _db.SaveChanges();
+        _db.ChangeTracker.Clear();
+
+        var entities = _db.Entities.Where(e => e.Id >= 8 && e.Id <= 9).OrderBy(e => e.Id).ToList();
+        entities.Should().HaveCount(2);
+        entities[0].Name.ToInsecureString().Should().Be("a");
+        entities[1].Name.ToInsecureString().Should().Be("b");
+    }
+
     public void Dispose()
     {
         _db.Database.CloseConnection();

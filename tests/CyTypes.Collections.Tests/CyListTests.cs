@@ -234,4 +234,138 @@ public sealed class CyListTests
         var act = () => list.GetEnumerator();
         act.Should().Throw<ObjectDisposedException>();
     }
+
+    [Fact]
+    public void Insert_adds_at_correct_index()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        using var b = new CyInt(2);
+        using var c = new CyInt(3);
+        list.Add(a);
+        list.Add(c);
+        list.Insert(1, b);
+
+        list.Count.Should().Be(3);
+        list[0].Should().BeSameAs(a);
+        list[1].Should().BeSameAs(b);
+        list[2].Should().BeSameAs(c);
+    }
+
+    [Fact]
+    public void Insert_null_throws()
+    {
+        using var list = new CyList<CyInt>();
+        var act = () => list.Insert(0, null!);
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Insert_after_dispose_throws()
+    {
+        var list = new CyList<CyInt>();
+        list.Dispose();
+        using var item = new CyInt(1);
+        var act = () => list.Insert(0, item);
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void RemoveAt_disposes_item()
+    {
+        using var list = new CyList<CyInt>();
+        var item = new CyInt(42);
+        list.Add(item);
+
+        list.RemoveAt(0);
+
+        list.Count.Should().Be(0);
+        item.IsDisposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RemoveAt_after_dispose_throws()
+    {
+        var list = new CyList<CyInt>();
+        list.Dispose();
+        var act = () => list.RemoveAt(0);
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void IndexOf_returns_correct_index()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        using var b = new CyInt(2);
+        list.Add(a);
+        list.Add(b);
+
+        list.IndexOf(a).Should().Be(0);
+        list.IndexOf(b).Should().Be(1);
+    }
+
+    [Fact]
+    public void IndexOf_missing_item_returns_minus_one()
+    {
+        using var list = new CyList<CyInt>();
+        using var item = new CyInt(1);
+        list.IndexOf(item).Should().Be(-1);
+    }
+
+    [Fact]
+    public void IndexOf_after_dispose_throws()
+    {
+        var list = new CyList<CyInt>();
+        list.Dispose();
+        using var item = new CyInt(1);
+        var act = () => list.IndexOf(item);
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void LastIndexOf_returns_last_occurrence()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        list.Add(a);
+        list.Add(a);
+
+        list.LastIndexOf(a).Should().Be(1);
+    }
+
+    [Fact]
+    public void LastIndexOf_after_dispose_throws()
+    {
+        var list = new CyList<CyInt>();
+        list.Dispose();
+        using var item = new CyInt(1);
+        var act = () => list.LastIndexOf(item);
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void CopyTo_copies_elements()
+    {
+        using var list = new CyList<CyInt>();
+        using var a = new CyInt(1);
+        using var b = new CyInt(2);
+        list.Add(a);
+        list.Add(b);
+
+        var array = new CyInt[2];
+        list.CopyTo(array, 0);
+
+        array[0].Should().BeSameAs(a);
+        array[1].Should().BeSameAs(b);
+    }
+
+    [Fact]
+    public void CopyTo_after_dispose_throws()
+    {
+        var list = new CyList<CyInt>();
+        list.Dispose();
+        var act = () => list.CopyTo(new CyInt[1], 0);
+        act.Should().Throw<ObjectDisposedException>();
+    }
 }

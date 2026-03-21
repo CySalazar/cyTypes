@@ -1,3 +1,4 @@
+using System.Globalization;
 using CyTypes.Primitives;
 using FluentAssertions;
 using Xunit;
@@ -119,7 +120,51 @@ public sealed class CyFloatTests
     {
         using var cy = new CyFloat(-0.0f);
         var value = cy.ToInsecureFloat();
-        // Verify it roundtrips as negative zero
         (1.0f / value).Should().Be(float.NegativeInfinity);
     }
+
+    [Fact]
+    public void Parse_string() { using var cy = CyFloat.Parse("3.14", CultureInfo.InvariantCulture); cy.ToInsecureFloat().Should().Be(3.14f); }
+
+    [Fact]
+    public void Parse_span() { using var cy = CyFloat.Parse("3.14".AsSpan(), CultureInfo.InvariantCulture); cy.ToInsecureFloat().Should().Be(3.14f); }
+
+    [Fact]
+    public void TryParse_valid() { CyFloat.TryParse("2.5", out var r).Should().BeTrue(); using (r) { r!.ToInsecureFloat().Should().Be(2.5f); } }
+
+    [Fact]
+    public void TryParse_invalid() { CyFloat.TryParse("abc", out var r).Should().BeFalse(); r.Should().BeNull(); }
+
+    [Fact]
+    public void TryParse_span_valid() { CyFloat.TryParse("1.5".AsSpan(), CultureInfo.InvariantCulture, out var r).Should().BeTrue(); using (r) { r!.ToInsecureFloat().Should().Be(1.5f); } }
+
+    [Fact]
+    public void TryParse_span_invalid() { CyFloat.TryParse("xyz".AsSpan(), CultureInfo.InvariantCulture, out var r).Should().BeFalse(); r.Should().BeNull(); }
+
+    [Fact]
+    public void MinValue_static() { using var cy = CyFloat.MinValue; cy.ToInsecureFloat().Should().Be(float.MinValue); }
+
+    [Fact]
+    public void MaxValue_static() { using var cy = CyFloat.MaxValue; cy.ToInsecureFloat().Should().Be(float.MaxValue); }
+
+    [Fact]
+    public void PositiveInfinity_static() { using var cy = CyFloat.PositiveInfinity; float.IsPositiveInfinity(cy.ToInsecureFloat()).Should().BeTrue(); }
+
+    [Fact]
+    public void NegativeInfinity_static() { using var cy = CyFloat.NegativeInfinity; float.IsNegativeInfinity(cy.ToInsecureFloat()).Should().BeTrue(); }
+
+    [Fact]
+    public void NaN_static() { using var cy = CyFloat.NaN; float.IsNaN(cy.ToInsecureFloat()).Should().BeTrue(); }
+
+    [Fact]
+    public void Epsilon_static() { using var cy = CyFloat.Epsilon; cy.ToInsecureFloat().Should().Be(float.Epsilon); }
+
+    [Fact]
+    public void CompareTo_null_returns_positive() { using var cy = new CyFloat(1.0f); cy.CompareTo(null).Should().BePositive(); }
+
+    [Fact]
+    public void Dispose_throws() { var cy = new CyFloat(1.0f); cy.Dispose(); var act = () => cy.ToInsecureFloat(); act.Should().Throw<ObjectDisposedException>(); }
+
+    [Fact]
+    public void ToString_never_leaks() { using var cy = new CyFloat(3.14f); cy.ToString().Should().Contain("Encrypted"); }
 }

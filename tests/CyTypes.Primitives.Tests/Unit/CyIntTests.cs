@@ -1,3 +1,4 @@
+using System.Globalization;
 using CyTypes.Core.Policy;
 using CyTypes.Primitives;
 using FluentAssertions;
@@ -91,6 +92,39 @@ public sealed class CyIntTests
         var act = () => cy.ToInsecureInt();
         act.Should().Throw<ObjectDisposedException>();
     }
+
+    [Fact]
+    public void Parse_string() { using var cy = CyInt.Parse("42", CultureInfo.InvariantCulture); cy.ToInsecureInt().Should().Be(42); }
+
+    [Fact]
+    public void Parse_span() { using var cy = CyInt.Parse("42".AsSpan(), CultureInfo.InvariantCulture); cy.ToInsecureInt().Should().Be(42); }
+
+    [Fact]
+    public void TryParse_valid() { CyInt.TryParse("42", out var r).Should().BeTrue(); using (r) { r!.ToInsecureInt().Should().Be(42); } }
+
+    [Fact]
+    public void TryParse_invalid() { CyInt.TryParse("abc", out var r).Should().BeFalse(); r.Should().BeNull(); }
+
+    [Fact]
+    public void TryParse_span_valid() { CyInt.TryParse("42".AsSpan(), null, out var r).Should().BeTrue(); using (r) { r!.ToInsecureInt().Should().Be(42); } }
+
+    [Fact]
+    public void TryParse_span_invalid() { CyInt.TryParse("abc".AsSpan(), null, out var r).Should().BeFalse(); r.Should().BeNull(); }
+
+    [Fact]
+    public void MinValue_returns_int_MinValue() { using var cy = CyInt.MinValue; cy.ToInsecureInt().Should().Be(int.MinValue); }
+
+    [Fact]
+    public void MaxValue_returns_int_MaxValue() { using var cy = CyInt.MaxValue; cy.ToInsecureInt().Should().Be(int.MaxValue); }
+
+    [Fact]
+    public void CompareTo_null_returns_positive() { using var cy = new CyInt(1); cy.CompareTo(null).Should().BePositive(); }
+
+    [Fact]
+    public void CompareTo_equal_returns_zero() { using var a = new CyInt(5); using var b = new CyInt(5); a.CompareTo(b).Should().Be(0); }
+
+    [Fact]
+    public void CompareTo_less_returns_negative() { using var a = new CyInt(1); using var b = new CyInt(5); a.CompareTo(b).Should().BeNegative(); }
 }
 
 public sealed class CyIntOperatorTests

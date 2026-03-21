@@ -339,3 +339,104 @@ public sealed class ReEncryptWithCyIntTests
         ci.ToInsecureInt().Should().Be(123);
     }
 }
+
+public sealed class CyTypeBaseAdditionalTests
+{
+    [Fact]
+    public void ToSecureBytes_returns_non_empty_bytes()
+    {
+        using var ct = new TestCyType(42);
+        var bytes = ct.ToSecureBytes();
+        bytes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void ToSecureBytes_on_disposed_throws()
+    {
+        var ct = new TestCyType(1);
+        ct.Dispose();
+        var act = () => ct.ToSecureBytes();
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_disposes_instance()
+    {
+        var ct = new TestCyType(42);
+        await ct.DisposeAsync();
+        ct.IsDisposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_is_idempotent()
+    {
+        var ct = new TestCyType(42);
+        await ct.DisposeAsync();
+        await ct.DisposeAsync();
+        ct.IsDisposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToString_IFormattable_returns_same_as_ToString()
+    {
+        using var ct = new TestCyType(42);
+        IFormattable formattable = ct;
+        formattable.ToString("N", null).Should().Be(ct.ToString());
+    }
+
+    [Fact]
+    public void ApplyPolicy_fires_PolicyChanged_event()
+    {
+        using var ct = new TestCyType(1, SecurityPolicy.Performance);
+        SecurityEvent? fired = null;
+        ct.PolicyChanged += (_, e) => fired = e;
+
+        ct.ApplyPolicy(SecurityPolicy.Balanced);
+
+        fired.Should().NotBeNull();
+        fired!.EventType.Should().Be(SecurityEventType.PolicyChanged);
+    }
+
+    [Fact]
+    public void ElevatePolicy_null_throws()
+    {
+        using var ct = new TestCyType(1);
+        var act = () => ct.ElevatePolicy(null!);
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void ApplyPolicy_null_throws()
+    {
+        using var ct = new TestCyType(1);
+        var act = () => ct.ApplyPolicy(null!);
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void ElevatePolicy_on_disposed_throws()
+    {
+        var ct = new TestCyType(1);
+        ct.Dispose();
+        var act = () => ct.ElevatePolicy(SecurityPolicy.Maximum);
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void ApplyPolicy_on_disposed_throws()
+    {
+        var ct = new TestCyType(1);
+        ct.Dispose();
+        var act = () => ct.ApplyPolicy(SecurityPolicy.Maximum);
+        act.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void EncryptValue_on_disposed_throws()
+    {
+        var ct = new TestCyType(1);
+        ct.Dispose();
+        var act = () => ct.RotateKeyAndReEncrypt();
+        act.Should().Throw<ObjectDisposedException>();
+    }
+}

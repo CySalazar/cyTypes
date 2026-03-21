@@ -132,4 +132,133 @@ public sealed class JsonSerializationTests
         var deserialized = JsonSerializer.Deserialize<CyString?>(json, options);
         deserialized.Should().BeNull();
     }
+
+    [Fact]
+    public void CyDecimal_round_trip()
+    {
+        var options = CreateOptions();
+        using var original = new CyDecimal(99.99m);
+
+        var json = JsonSerializer.Serialize(original, options);
+
+        using var deserialized = JsonSerializer.Deserialize<CyDecimal>(json, options)!;
+        deserialized.ToInsecureDecimal().Should().Be(99.99m);
+    }
+
+    [Fact]
+    public void CyFloat_round_trip()
+    {
+        var options = CreateOptions();
+        using var original = new CyFloat(2.71f);
+
+        var json = JsonSerializer.Serialize(original, options);
+
+        using var deserialized = JsonSerializer.Deserialize<CyFloat>(json, options)!;
+        deserialized.ToInsecureFloat().Should().Be(2.71f);
+    }
+
+    [Fact]
+    public void CyLong_round_trip()
+    {
+        var options = CreateOptions();
+        using var original = new CyLong(9876543210L);
+
+        var json = JsonSerializer.Serialize(original, options);
+        json.Should().Be("9876543210");
+
+        using var deserialized = JsonSerializer.Deserialize<CyLong>(json, options)!;
+        deserialized.ToInsecureLong().Should().Be(9876543210L);
+    }
+
+    [Fact]
+    public void CyDecimal_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyDecimal>("\"not a number\"", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyFloat_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyFloat>("\"not a number\"", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyLong_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyLong>("\"not a number\"", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyInt_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyInt>("\"not a number\"", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyDouble_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyDouble>("\"not a number\"", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyBool_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyBool>("42", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyGuid_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyGuid>("42", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyBytes_null_handling()
+    {
+        var options = CreateOptions();
+        CyBytes? nullValue = null;
+        var json = JsonSerializer.Serialize(nullValue, options);
+        json.Should().Be("null");
+
+        var deserialized = JsonSerializer.Deserialize<CyBytes?>(json, options);
+        deserialized.Should().BeNull();
+    }
+
+    [Fact]
+    public void CyDateTime_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyDateTime>("42", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyBytes_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyBytes>("42", options);
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void CyString_deserialize_wrong_token_throws()
+    {
+        var options = CreateOptions();
+        var act = () => JsonSerializer.Deserialize<CyString>("42", options);
+        act.Should().Throw<JsonException>();
+    }
 }

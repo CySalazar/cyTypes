@@ -1,3 +1,4 @@
+using System.Globalization;
 using CyTypes.Primitives;
 using FluentAssertions;
 using Xunit;
@@ -70,5 +71,56 @@ public sealed class CyDecimalTests
         using var b = new CyDecimal(2m);
         using var c = a + b;
         c.IsTainted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Parse_string() { using var cy = CyDecimal.Parse("99.99", CultureInfo.InvariantCulture); cy.ToInsecureDecimal().Should().Be(99.99m); }
+
+    [Fact]
+    public void Parse_span() { using var cy = CyDecimal.Parse("99.99".AsSpan(), CultureInfo.InvariantCulture); cy.ToInsecureDecimal().Should().Be(99.99m); }
+
+    [Fact]
+    public void TryParse_valid() { CyDecimal.TryParse("42.5", out var r).Should().BeTrue(); using (r) { r!.ToInsecureDecimal().Should().Be(42.5m); } }
+
+    [Fact]
+    public void TryParse_invalid() { CyDecimal.TryParse("abc", out var r).Should().BeFalse(); r.Should().BeNull(); }
+
+    [Fact]
+    public void TryParse_span_valid() { CyDecimal.TryParse("1.5".AsSpan(), CultureInfo.InvariantCulture, out var r).Should().BeTrue(); using (r) { r!.ToInsecureDecimal().Should().Be(1.5m); } }
+
+    [Fact]
+    public void TryParse_span_invalid() { CyDecimal.TryParse("xyz".AsSpan(), CultureInfo.InvariantCulture, out var r).Should().BeFalse(); r.Should().BeNull(); }
+
+    [Fact]
+    public void MinValue_static() { using var cy = CyDecimal.MinValue; cy.ToInsecureDecimal().Should().Be(decimal.MinValue); }
+
+    [Fact]
+    public void MaxValue_static() { using var cy = CyDecimal.MaxValue; cy.ToInsecureDecimal().Should().Be(decimal.MaxValue); }
+
+    [Fact]
+    public void Zero_static() { using var cy = CyDecimal.Zero; cy.ToInsecureDecimal().Should().Be(0m); }
+
+    [Fact]
+    public void One_static() { using var cy = CyDecimal.One; cy.ToInsecureDecimal().Should().Be(1m); }
+
+    [Fact]
+    public void MinusOne_static() { using var cy = CyDecimal.MinusOne; cy.ToInsecureDecimal().Should().Be(-1m); }
+
+    [Fact]
+    public void CompareTo_null_returns_positive() { using var cy = new CyDecimal(1m); cy.CompareTo(null).Should().BePositive(); }
+
+    [Fact]
+    public void Dispose_throws() { var cy = new CyDecimal(1m); cy.Dispose(); var act = () => cy.ToInsecureDecimal(); act.Should().Throw<ObjectDisposedException>(); }
+
+    [Fact]
+    public void ToString_never_leaks() { using var cy = new CyDecimal(42m); cy.ToString().Should().Contain("Encrypted"); }
+
+    [Fact]
+    public void Null_equality()
+    {
+        using var a = new CyDecimal(1m);
+        (a == null).Should().BeFalse();
+        (null == a).Should().BeFalse();
+        ((CyDecimal?)null == null).Should().BeTrue();
     }
 }

@@ -80,4 +80,77 @@ public sealed class CyBytesTests
         retrieved[0].Should().Be(1);
         retrieved[1].Should().Be(2);
     }
+
+    [Fact]
+    public void Equality_same_content()
+    {
+        using var a = new CyBytes(new byte[] { 1, 2, 3 });
+        using var b = new CyBytes(new byte[] { 1, 2, 3 });
+        (a == b).Should().BeTrue();
+        (a != b).Should().BeFalse();
+        a.Equals(b).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Equality_different_content()
+    {
+        using var a = new CyBytes(new byte[] { 1, 2, 3 });
+        using var b = new CyBytes(new byte[] { 4, 5, 6 });
+        (a == b).Should().BeFalse();
+        (a != b).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Equality_with_null()
+    {
+        using var a = new CyBytes(new byte[] { 1 });
+        a.Equals(null).Should().BeFalse();
+        (a == null).Should().BeFalse();
+        (null == a).Should().BeFalse();
+        ((CyBytes?)null == (CyBytes?)null).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Comparison_operators()
+    {
+        using var a = new CyBytes(new byte[] { 1, 2 });
+        using var b = new CyBytes(new byte[] { 1, 3 });
+        (a < b).Should().BeTrue();
+        (b > a).Should().BeTrue();
+        (a <= b).Should().BeTrue();
+        (b >= a).Should().BeTrue();
+    }
+
+    [Fact]
+    public void CompareTo_null_returns_positive()
+    {
+        using var a = new CyBytes(new byte[] { 1 });
+        a.CompareTo(null).Should().BePositive();
+    }
+
+    [Fact]
+    public void Equals_object_overload()
+    {
+        using var a = new CyBytes(new byte[] { 1, 2 });
+        using var b = new CyBytes(new byte[] { 1, 2 });
+        a.Equals((object)b).Should().BeTrue();
+        a.Equals((object?)null).Should().BeFalse();
+        a!.Equals((object)"not a CyBytes").Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetHashCode_returns_value()
+    {
+        using var a = new CyBytes(new byte[] { 1 });
+        a.GetHashCode().Should().Be(a.InstanceId.GetHashCode());
+    }
+
+    [Fact]
+    public void Dispose_makes_ToInsecure_throw()
+    {
+        var cy = new CyBytes(new byte[] { 1 });
+        cy.Dispose();
+        var act = () => cy.ToInsecureBytes();
+        act.Should().Throw<ObjectDisposedException>();
+    }
 }

@@ -87,4 +87,50 @@ public sealed class ServiceRegistrationTests
         var act = () => services.AddCyTypesFhe(null!);
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void AddCyTypesFhe_throws_on_null_services()
+    {
+        IServiceCollection services = null!;
+        var act = () => services.AddCyTypesFhe(_ => null!);
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void CyTypesOptions_has_correct_defaults()
+    {
+        var options = new CyTypesOptions();
+
+        options.DefaultPolicy.Should().Be(SecurityPolicy.Default);
+        options.EnableRedactingLogger.Should().BeTrue();
+        options.EnableAudit.Should().BeTrue();
+        options.EnableFhe.Should().BeFalse();
+        options.EnablePqcKeyEncapsulation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AddCyTypes_without_PqcEnabled_does_not_register_IPqcKeyEncapsulation()
+    {
+        using var sp = BuildProvider();
+        var pqc = sp.GetService<IPqcKeyEncapsulation>();
+        pqc.Should().BeNull();
+    }
+
+    [Fact]
+    public void AddCyTypes_with_RedactingLogger_enabled_registers_provider()
+    {
+        using var sp = BuildProvider(o => o.EnableRedactingLogger = true);
+        var provider = sp.GetService<RedactingLoggerProvider>();
+        provider.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void AddCyTypes_returns_same_service_collection()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<ILogger>(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("test"));
+        var result = services.AddCyTypes();
+        result.Should().BeSameAs(services);
+    }
 }

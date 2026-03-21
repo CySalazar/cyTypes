@@ -112,4 +112,37 @@ public sealed class CyBoolLogicTests
         using var b = !a;
         b.IsTainted.Should().BeTrue();
     }
+
+    [Fact]
+    public void CompareTo_null_returns_positive()
+    {
+        using var cy = new CyBool(true);
+        cy.CompareTo(null).Should().BePositive();
+    }
+
+    [Fact]
+    public void CompareTo_false_less_than_true()
+    {
+        using var f = new CyBool(false);
+        using var t = new CyBool(true);
+        f.CompareTo(t).Should().BeNegative();
+    }
+
+    [Fact]
+    public void Null_equality()
+    {
+        using var a = new CyBool(true);
+        (a == null).Should().BeFalse();
+        (null == a).Should().BeFalse();
+        ((CyBool?)null == null).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Dispose_throws()
+    {
+        var cy = new CyBool(true);
+        cy.Dispose();
+        var act = () => cy.ToInsecureBool();
+        act.Should().Throw<ObjectDisposedException>();
+    }
 }
