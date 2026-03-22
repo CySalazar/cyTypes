@@ -21,6 +21,12 @@ public static class Program
         ("JSON Serialization", JsonSerialization.Run),
         ("Stream Encryption", StreamEncryption.Run),
         ("CKKS Floating-Point FHE", CkksFloatingPoint.Run),
+        ("FHE BFV — Integer Arithmetic on Encrypted Data", FheBfvArithmetic.Run),
+        ("Post-Quantum Key Exchange (ML-KEM-1024)", PqcKeyExchange.Run),
+        ("Encrypted Collections (CyList, CyDictionary)", CollectionsDemo.Run),
+        ("Dependency Injection + Redacting Logger", DependencyInjectionDemo.Run),
+        ("Overflow Mode + Key TTL / Expiration", OverflowAndKeyTtl.Run),
+        ("Secure Serialization — JSON + HMAC Integrity", SecureSerialization.Run),
     ];
 
     public static void Main(string[] args)

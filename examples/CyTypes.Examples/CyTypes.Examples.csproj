@@ -16,6 +16,8 @@
     <ProjectReference Include="..\..\src\CyTypes.Collections\CyTypes.Collections.csproj" />
     <ProjectReference Include="..\..\src\CyTypes.EntityFramework\CyTypes.EntityFramework.csproj" />
     <ProjectReference Include="..\..\src\CyTypes.Streams\CyTypes.Streams.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.DependencyInjection\CyTypes.DependencyInjection.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Logging\CyTypes.Logging.csproj" />
   </ItemGroup>
 
   <ItemGroup>
