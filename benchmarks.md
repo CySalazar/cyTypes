@@ -12,7 +12,7 @@ This report presents the performance characterization of the cyTypes library —
 - **SecureBuffer** (pinned, zero-on-dispose memory) is 9–118x slower than regular arrays, but the overhead amortizes as buffer sizes grow. This is the inherent cost of secure memory handling (VirtualLock/mlock, GCHandle pinning, cryptographic zeroing).
 - **FHE (BFV scheme)** is ~817x slower than AES-GCM for encryption, as expected. Homomorphic encryption trades performance for the ability to compute on encrypted data without decryption.
 - **Application-level benchmarks** (JSON serialization, EF Core) show that overhead scales linearly with the number of encrypted fields — there is no superlinear penalty.
-- **Streaming benchmarks** (ChunkedCryptoEngine, CyStream, CyFileStream) are defined but results are pending — run with `--filter "*Stream*"` to populate.
+- **Streaming benchmarks** show ChunkedCryptoEngine at **5,315 MB/s** (64 KB chunks), CyStream at **1,024 MB/s** (256 KB round-trip), and CyFileStream at **493 MB/s** (256 KB with disk I/O) — all AES-NI accelerated.
 
 These results confirm that cyTypes is suitable for production workloads where data-at-rest and data-in-transit encryption is required, with overhead profiles that are predictable, linear, and dominated by the underlying cryptographic operations rather than by the library's abstraction layer.
 
