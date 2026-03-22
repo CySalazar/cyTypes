@@ -139,7 +139,7 @@ bool equal = x == y;    // False
 
 ## Encrypted String Equality
 
-`StringOperationMode.HomomorphicEquality` uses AES-SIV (RFC 5297) deterministic encryption for constant-time encrypted string equality checks.
+> **Naming clarification:** Despite the name `HomomorphicEquality`, this mode does **not** use FHE. It uses **AES-SIV (RFC 5297) deterministic encryption** — same plaintext always produces the same ciphertext, enabling equality comparison on ciphertexts without decryption. The name reflects its position in the `HomomorphicFull` policy preset alongside genuine FHE operations, not the underlying cryptographic mechanism.
 
 ### Setup
 
@@ -164,7 +164,15 @@ bool eq = s1 == s2;  // True
 bool ne = s1 == s3;  // False
 ```
 
-> **Security note:** AES-SIV is deterministic -- same plaintext produces same ciphertext. This intentionally leaks equality patterns (IND-CPA secure but not IND-CCA2). Use only for equality checks, not ordering.
+### Security Trade-offs
+
+AES-SIV deterministic encryption provides IND-CPA security but **not** IND-CCA2. This has concrete implications:
+
+- **Equality pattern leakage**: An attacker with memory access who observes multiple ciphertexts can determine which values are equal without knowing the plaintext. This enables **frequency analysis** — if the attacker knows the distribution of possible values (e.g., a set of known usernames), they can correlate ciphertext frequencies to likely plaintexts.
+- **No ordering**: Deterministic ciphertexts do not preserve ordering — only equality is supported.
+- **Constant-time comparison**: Ciphertext comparison uses fixed-time operations to prevent timing side-channels.
+
+**When to use:** Equality checks on encrypted strings where the set of possible values is large or unpredictable (e.g., session tokens, random identifiers). **Avoid** when the plaintext domain is small or the frequency distribution is skewed (e.g., boolean flags, enum labels) — in those cases, frequency analysis trivially reveals the mapping.
 
 ## Parameter Presets
 

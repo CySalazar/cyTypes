@@ -86,7 +86,7 @@ Enables FHE arithmetic (add, subtract, multiply) on integer types via Microsoft 
 - `SecureEnclave` -- decrypt and compare in-process
 
 ### StringOperationMode
-- `HomomorphicEquality` -- encrypted equality test (Phase 3b, not yet available)
+- `HomomorphicEquality` -- encrypted equality test via AES-SIV deterministic encryption (not FHE)
 - `SecureEnclave` -- decrypt and operate in-process
 
 ### MemoryProtection
