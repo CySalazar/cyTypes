@@ -9,7 +9,7 @@ namespace CyTypes.Streams.Network;
 
 /// <summary>
 /// Provides bidirectional encrypted communication over TCP after
-/// hybrid key exchange (X25519 + ML-KEM-1024).
+/// hybrid key exchange (ECDH P-256 + ML-KEM-1024).
 /// Supports heartbeat and configurable timeouts.
 /// </summary>
 public sealed class CyNetworkStream : IDisposable, IAsyncDisposable

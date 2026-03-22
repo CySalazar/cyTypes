@@ -484,7 +484,7 @@ using CyTypes.Streams.Ipc;
 
 // Server
 using var server = new CyPipeServer("my-pipe");
-using var conn = await server.AcceptAsync();          // X25519 + ML-KEM handshake
+using var conn = await server.AcceptAsync();          // ECDH + ML-KEM handshake
 await conn.SendAsync(data);
 byte[]? received = await conn.ReceiveAsync();
 
@@ -503,7 +503,7 @@ using System.Net;
 // Server
 using var server = new CyNetworkServer(IPAddress.Loopback, 9000);
 server.Start();
-using var conn = await server.AcceptAsync();          // X25519 + ML-KEM handshake
+using var conn = await server.AcceptAsync();          // ECDH + ML-KEM handshake
 await conn.SendAsync(data);
 byte[]? received = await conn.ReceiveAsync();
 
@@ -525,7 +525,7 @@ builder.Services.AddCyTypes(options =>
     options.DefaultPolicy = SecurityPolicy.Balanced;
     options.EnableRedactingLogger = true;  // default: true
     options.EnableAudit = true;            // default: true
-    options.EnablePqcKeyEncapsulation = false; // PQC stub, not yet production
+    options.EnablePqcKeyEncapsulation = true;  // ML-KEM-1024 hybrid key exchange
 });
 
 // Optional: register FHE engine
@@ -1078,7 +1078,7 @@ dotnet run --project tests/CyTypes.Benchmarks.Application -c Release
 | Encryption | AES-256-GCM | 12-byte random nonce, 16-byte auth tag |
 | Stream Encryption | Chunked AES-256-GCM | Per-chunk nonce, sequence number, key ratcheting every 2^20 chunks |
 | Key Derivation | HKDF-SHA512 | Contextual info for key diversification |
-| Key Exchange | X25519 + ML-KEM-1024 | Hybrid post-quantum key exchange (RFC 7748 + FIPS 203) |
+| Key Exchange | ECDH P-256 + ML-KEM-1024 | Hybrid post-quantum key exchange (NIST P-256 + FIPS 203) |
 | Secure Comparison | HMAC-SHA512 | `FixedTimeEquals` — immune to timing attacks |
 | Stream Integrity | HMAC-SHA512 | Footer HMAC over header + all chunk GCM tags |
 | Nonce Generation | `RandomNumberGenerator.Fill()` | CSPRNG per encryption |
@@ -1145,10 +1145,10 @@ dotnet run --project tests/CyTypes.Benchmarks -c Release
 | 2 | Roslyn analyzer, secure collections, auto-redacting logging, EF Core | Complete |
 | 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | Complete |
 | 3b | FHE — CKKS support, comparison/string operations on ciphertexts | Planned |
-| 3c | PQC — ML-KEM-1024 key encapsulation (stub present, integration pending) | In Progress (~90%) |
+| 3c | PQC — ML-KEM-1024 key encapsulation (hybrid ECDH + ML-KEM key exchange) | Complete |
 | 4 | Encrypted streaming — chunked AES-256-GCM, file I/O, IPC (named pipes), TCP, hybrid key exchange | Complete |
 
-> **Phase 3 status:** Phase 3a is complete. The `CyTypes.Fhe` package provides a working `SealBfvEngine` for integer arithmetic (add, subtract, multiply, negate) on BFV ciphertexts, with full `SecurityPolicyBuilder` integration for `HomomorphicBasic` and `HomomorphicFull` arithmetic modes. CKKS (approximate arithmetic for floating-point types), homomorphic comparisons, and string operations are planned for Phase 3b. ML-KEM-1024 key encapsulation (`MlKemKeyEncapsulation`) is registered via DI but not yet wired into the encryption pipeline (~90%).
+> **Phase 3 status:** Phase 3a is complete. The `CyTypes.Fhe` package provides a working `SealBfvEngine` for integer arithmetic (add, subtract, multiply, negate) on BFV ciphertexts, with full `SecurityPolicyBuilder` integration for `HomomorphicBasic` and `HomomorphicFull` arithmetic modes. CKKS (approximate arithmetic for floating-point types), homomorphic comparisons, and string operations are planned for Phase 3b. ML-KEM-1024 key encapsulation is fully integrated into the streaming layer (CyNetworkStream, CyPipeStream) via hybrid ECDH P-256 + ML-KEM-1024 key exchange.
 
 ## Contributing
 

@@ -9,7 +9,7 @@ namespace CyTypes.Streams.Ipc;
 
 /// <summary>
 /// Provides bidirectional encrypted communication over a named pipe after
-/// hybrid key exchange (X25519 + ML-KEM-1024).
+/// hybrid key exchange (ECDH P-256 + ML-KEM-1024).
 /// </summary>
 public sealed class CyPipeStream : IDisposable, IAsyncDisposable
 {

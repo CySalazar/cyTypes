@@ -1017,9 +1017,9 @@ The cryptographic primitives benchmarked in this report conform to the following
 | HMAC-SHA512 | RFC 2104 / FIPS 198-1 | The Keyed-Hash Message Authentication Code |
 | Nonce Generation | NIST SP 800-90A | Recommendation for Random Number Generation Using Deterministic Random Bit Generators (via `RandomNumberGenerator`) |
 | FHE BFV | *Fan-Vercauteren (2012)* | Somewhat Practical Fully Homomorphic Encryption (implemented via Microsoft SEAL) |
-| X25519 | RFC 7748 | Elliptic-curve Diffie-Hellman key exchange for session key negotiation |
+| ECDH P-256 | NIST P-256 | Elliptic-curve Diffie-Hellman key exchange for session key negotiation |
 | ML-KEM-1024 | FIPS 203 | Post-quantum key encapsulation mechanism (Module-Lattice-Based) |
-| Hybrid key exchange | X25519 + ML-KEM-1024 | Combined classical + post-quantum key exchange for quantum resistance |
+| Hybrid key exchange | ECDH P-256 + ML-KEM-1024 | Combined classical + post-quantum key exchange for quantum resistance |
 | Constant-time comparison | CERT C rule MSC32-C | `CryptographicOperations.FixedTimeEquals` — immune to timing side-channel attacks |
 | Secure memory zeroing | CWE-244, CERT C rule MEM03-C | `CryptographicOperations.ZeroMemory` — prevents sensitive data persistence in freed memory |
 

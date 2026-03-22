@@ -183,7 +183,7 @@ public class AsvsV6ComplianceTests
 
     /// <summary>
     /// V6.6 (informative): Verify post-quantum key exchange is available.
-    /// SessionKeyNegotiator uses ML-KEM-1024 (FIPS 203) hybrid with X25519.
+    /// SessionKeyNegotiator uses ML-KEM-1024 (FIPS 203) hybrid with ECDH P-256.
     /// </summary>
     [Fact]
     public void V6_6_PostQuantum_MlKem1024Available()

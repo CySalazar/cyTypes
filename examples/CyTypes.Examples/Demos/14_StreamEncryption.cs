@@ -153,7 +153,7 @@ public static class StreamEncryption
 
         ConsoleHelpers.PrintNote("In production, the 256-bit stream key would be negotiated via:");
         ConsoleHelpers.PrintNote("  - TLS 1.3 handshake (for network streams via CyNetworkStream)");
-        ConsoleHelpers.PrintNote("  - Post-quantum key exchange (X25519 + ML-KEM hybrid)");
+        ConsoleHelpers.PrintNote("  - Post-quantum key exchange (ECDH + ML-KEM hybrid)");
         ConsoleHelpers.PrintNote("  - Pre-shared key (for file encryption or IPC via CyPipeStream)");
         Console.WriteLine();
 

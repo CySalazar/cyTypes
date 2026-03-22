@@ -6,9 +6,9 @@ using CyTypes.Core.Memory;
 namespace CyTypes.Core.Crypto.KeyExchange;
 
 /// <summary>
-/// Hybrid key exchange combining X25519 (ECDH) and ML-KEM-1024 (post-quantum).
+/// Hybrid key exchange combining ECDH P-256 and ML-KEM-1024 (post-quantum).
 /// The session key is derived as:
-/// <c>HKDF-SHA512(x25519_shared || mlkem_shared, salt=transcript_hash, info="CyTypes.SessionKey")</c>.
+/// <c>HKDF-SHA512(ecdh_shared || mlkem_shared, salt=transcript_hash, info="CyTypes.SessionKey")</c>.
 /// </summary>
 public sealed class SessionKeyNegotiator : IDisposable
 {
@@ -20,8 +20,8 @@ public sealed class SessionKeyNegotiator : IDisposable
     private byte[]? _mlKemSecretKey;
     private bool _isDisposed;
 
-    /// <summary>Gets the X25519 public key bytes (SubjectPublicKeyInfo DER).</summary>
-    public byte[] X25519PublicKey { get; }
+    /// <summary>Gets the ECDH P-256 public key bytes (SubjectPublicKeyInfo DER).</summary>
+    public byte[] EcdhPublicKey { get; }
 
     /// <summary>Gets the ML-KEM-1024 public key bytes.</summary>
     public byte[] MlKemPublicKey => _mlKemPublicKey ?? throw new InvalidOperationException("Key pair not generated.");
@@ -34,7 +34,7 @@ public sealed class SessionKeyNegotiator : IDisposable
         _ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
         _mlKem = new MlKemKeyEncapsulation();
 
-        X25519PublicKey = _ecdh.PublicKey.ExportSubjectPublicKeyInfo();
+        EcdhPublicKey = _ecdh.PublicKey.ExportSubjectPublicKeyInfo();
 
         var (pub, sec) = _mlKem.GenerateKeyPair();
         _mlKemPublicKey = pub;
@@ -47,7 +47,7 @@ public sealed class SessionKeyNegotiator : IDisposable
     public HandshakeMessage CreateHandshake()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        return new HandshakeMessage(X25519PublicKey, MlKemPublicKey);
+        return new HandshakeMessage(EcdhPublicKey, MlKemPublicKey);
     }
 
     /// <summary>
@@ -60,9 +60,9 @@ public sealed class SessionKeyNegotiator : IDisposable
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        // X25519/ECDH shared secret
+        // ECDH P-256 shared secret
         using var peerEcdh = ECDiffieHellman.Create();
-        peerEcdh.ImportSubjectPublicKeyInfo(responderHandshake.X25519PublicKey, out _);
+        peerEcdh.ImportSubjectPublicKeyInfo(responderHandshake.EcdhPublicKey, out _);
         var ecdhShared = _ecdh.DeriveKeyMaterial(peerEcdh.PublicKey);
 
         // ML-KEM encapsulation
@@ -92,9 +92,9 @@ public sealed class SessionKeyNegotiator : IDisposable
         if (_mlKemSecretKey == null)
             throw new InvalidOperationException("ML-KEM secret key not available.");
 
-        // X25519/ECDH shared secret
+        // ECDH P-256 shared secret
         using var peerEcdh = ECDiffieHellman.Create();
-        peerEcdh.ImportSubjectPublicKeyInfo(initiatorHandshake.X25519PublicKey, out _);
+        peerEcdh.ImportSubjectPublicKeyInfo(initiatorHandshake.EcdhPublicKey, out _);
         var ecdhShared = _ecdh.DeriveKeyMaterial(peerEcdh.PublicKey);
 
         // ML-KEM decapsulation
@@ -120,7 +120,7 @@ public sealed class SessionKeyNegotiator : IDisposable
 
         // Transcript hash uses canonical (sorted) key ordering so both sides produce the same hash.
         // Sort: smaller ECDH key first, then smaller ML-KEM key first.
-        var (ecdhFirst, ecdhSecond) = OrderByContent(X25519PublicKey, peerHandshake.X25519PublicKey);
+        var (ecdhFirst, ecdhSecond) = OrderByContent(EcdhPublicKey, peerHandshake.EcdhPublicKey);
         var (mlKemFirst, mlKemSecond) = OrderByContent(MlKemPublicKey, peerHandshake.MlKemPublicKey);
 
         var transcript = new byte[ecdhFirst.Length + ecdhSecond.Length +
@@ -178,9 +178,9 @@ public sealed class SessionKeyNegotiator : IDisposable
 /// <summary>
 /// Contains the public keys exchanged during a handshake.
 /// </summary>
-/// <param name="X25519PublicKey">The X25519/ECDH public key (SubjectPublicKeyInfo DER).</param>
+/// <param name="EcdhPublicKey">The ECDH P-256 public key (SubjectPublicKeyInfo DER).</param>
 /// <param name="MlKemPublicKey">The ML-KEM-1024 public key.</param>
-public sealed record HandshakeMessage(byte[] X25519PublicKey, byte[] MlKemPublicKey)
+public sealed record HandshakeMessage(byte[] EcdhPublicKey, byte[] MlKemPublicKey)
 {
     /// <summary>
     /// Serializes the handshake message to bytes.
@@ -188,10 +188,10 @@ public sealed record HandshakeMessage(byte[] X25519PublicKey, byte[] MlKemPublic
     /// </summary>
     public byte[] Serialize()
     {
-        var output = new byte[4 + X25519PublicKey.Length + MlKemPublicKey.Length];
-        BitConverter.TryWriteBytes(output.AsSpan(0, 4), X25519PublicKey.Length);
-        X25519PublicKey.CopyTo(output, 4);
-        MlKemPublicKey.CopyTo(output, 4 + X25519PublicKey.Length);
+        var output = new byte[4 + EcdhPublicKey.Length + MlKemPublicKey.Length];
+        BitConverter.TryWriteBytes(output.AsSpan(0, 4), EcdhPublicKey.Length);
+        EcdhPublicKey.CopyTo(output, 4);
+        MlKemPublicKey.CopyTo(output, 4 + EcdhPublicKey.Length);
         return output;
     }
 
