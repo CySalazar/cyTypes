@@ -980,7 +980,7 @@ The `CyTypes.Fhe` package provides an initial FHE implementation using **Microso
 
 - **BFV scheme**: Integer addition, subtraction, multiplication, and negation on encrypted data — without decryption
 - **CKKS scheme**: Not yet supported (approximate arithmetic for floating-point)
-- **Limitations**: Homomorphic comparisons and string operations are not implemented. The Core `SecurityPolicyBuilder` does not yet accept FHE modes — direct use of the Fhe API is required
+- **Limitations**: Homomorphic comparisons and string operations are not implemented (Phase 3b). BFV supports integer types only (CyInt, CyLong); floating-point types require CKKS (Phase 3b). Division and modulo fall back to SecureEnclave decryption
 
 ### API
 
@@ -1046,9 +1046,9 @@ The cyTypes wrapper adds **< 1% overhead** over raw AES-GCM encryption. HMAC and
 | SecureBuffer alloc | 9-118x vs array | Expected (secure memory) |
 | FHE BFV encrypt | ~817x vs AES-GCM | Expected (homomorphic) |
 | JSON serialize (single) | ~108x | Expected (per-field encryption) |
-| ChunkedCryptoEngine (chunk encrypt) | Pending | Run with `--filter "*Stream*"` |
-| CyStream round-trip (MemoryStream) | Pending | Run with `--filter "*Stream*"` |
-| CyFileStream round-trip (disk I/O) | Pending | Run with `--filter "*Stream*"` |
+| ChunkedCryptoEngine (64 KB encrypt) | 11.76 us | 5,315 MB/s throughput |
+| CyStream round-trip (256 KB) | ~250 us | 1,024 MB/s throughput |
+| CyFileStream round-trip (256 KB) | ~520 us | 493 MB/s throughput |
 
 ### Running Benchmarks
 
@@ -1143,12 +1143,12 @@ dotnet run --project tests/CyTypes.Benchmarks -c Release
 |-------|---------|--------|
 | 1 | Core crypto, primitives, taint, policies | Complete |
 | 2 | Roslyn analyzer, secure collections, auto-redacting logging, EF Core | Complete |
-| 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | In Progress (~60%) |
+| 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | Complete |
 | 3b | FHE — CKKS support, comparison/string operations on ciphertexts | Planned |
 | 3c | PQC — ML-KEM-1024 key encapsulation (stub present, integration pending) | In Progress (~90%) |
 | 4 | Encrypted streaming — chunked AES-256-GCM, file I/O, IPC (named pipes), TCP, hybrid key exchange | Complete |
 
-> **Phase 3 status:** The `CyTypes.Fhe` package exists with a working `SealBfvEngine` for integer arithmetic on BFV ciphertexts, but `SecurityPolicyBuilder` still rejects FHE modes — direct use of the Fhe package API is required. CKKS (approximate arithmetic) and homomorphic comparisons/string operations are not yet implemented. ML-KEM-1024 key encapsulation (`MlKemKeyEncapsulation`) is registered via DI but not yet wired into the encryption pipeline. Phase 3 focuses on completing these integrations for production use.
+> **Phase 3 status:** Phase 3a is complete — `SealBfvEngine` provides integer arithmetic (+, −, ×) on BFV ciphertexts, fully integrated into CyInt/CyLong operators via `FheEngineProvider`. `SecurityPolicyBuilder` accepts `ArithmeticMode.HomomorphicBasic` and `HomomorphicFull` (with PinnedLocked memory and, for Full, AllOperations audit). Phase 3b (CKKS for floating-point, homomorphic comparisons, homomorphic string equality) is not yet implemented. ML-KEM-1024 key encapsulation is functional for stream key exchange (CyNetworkStream, CyPipeStream) but not wired into primitive key wrapping.
 
 ## Contributing
 

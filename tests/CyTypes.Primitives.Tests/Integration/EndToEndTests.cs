@@ -265,7 +265,7 @@ public sealed class EndToEndTests
             .Build();
         act2.Should().Throw<PolicyViolationException>();
 
-        // FHE modes are rejected (Phase 3 not available)
+        // HomomorphicFull without AllOperations audit level is rejected
         var act3 = () => new SecurityPolicyBuilder()
             .WithArithmeticMode(ArithmeticMode.HomomorphicFull)
             .Build();
