@@ -863,7 +863,7 @@ using var cy = new CyInt(42, policy);
 | `WithKeyStoreMinimumCapability(KeyStoreCapability)` | Minimum key store capability |
 | `Build()` | Validate and build the policy |
 
-> **Note:** FHE arithmetic modes (`HomomorphicBasic`, `HomomorphicFull`) are accepted by the builder with constraint validation: `HomomorphicBasic` requires at least `PinnedLocked` memory protection; `HomomorphicFull` additionally requires `AuditLevel.AllOperations`. FHE comparison (`HomomorphicCircuit`) and string (`HomomorphicEquality`) modes are reserved for Phase 3b. Stream properties (`StreamChunkSize`, `RequireKeyExchange`, `StreamIntegrity`) are currently configured via the predefined policies and are not yet exposed on `SecurityPolicyBuilder`.
+> **Note:** FHE arithmetic modes (`HomomorphicBasic`, `HomomorphicFull`) are accepted by the builder with constraint validation: `HomomorphicBasic` requires at least `PinnedLocked` memory protection; `HomomorphicFull` additionally requires `AuditLevel.AllOperations`. FHE comparison (`HomomorphicCircuit`) and string (`HomomorphicEquality`) modes are fully supported and follow the same constraint validation. Stream properties (`StreamChunkSize`, `RequireKeyExchange`, `StreamIntegrity`) are currently configured via the predefined policies and are not yet exposed on `SecurityPolicyBuilder`.
 
 ## Taint Tracking
 
@@ -974,13 +974,14 @@ using var ok = new CyInt(42); // ✅ OK
 
 ## FHE — Fully Homomorphic Encryption
 
-The `CyTypes.Fhe` package provides an initial FHE implementation using **Microsoft SEAL** with the BFV scheme for integer arithmetic on ciphertexts.
+The `CyTypes.Fhe` package provides FHE using **Microsoft SEAL** with the BFV scheme (exact integer arithmetic) and the CKKS scheme (approximate floating-point arithmetic) on ciphertexts.
 
 ### Current Status
 
 - **BFV scheme**: Integer addition, subtraction, multiplication, and negation on encrypted data — without decryption
-- **CKKS scheme**: Not yet supported (approximate arithmetic for floating-point)
-- **Limitations**: Homomorphic comparisons and string operations are not implemented (Phase 3b). `SecurityPolicyBuilder` accepts BFV arithmetic modes (`HomomorphicBasic`/`HomomorphicFull`) with appropriate constraints; comparison and string FHE modes remain Phase 3b
+- **CKKS scheme**: Approximate floating-point addition, subtraction, multiplication, and negation on encrypted data (CyFloat, CyDouble, CyDecimal)
+- **Comparisons**: `ComparisonMode.HomomorphicCircuit` computes encrypted differences via BFV/CKKS; the comparison verdict requires decryption of the difference to extract the sign
+- **String equality**: `StringOperationMode.HomomorphicEquality` uses AES-SIV deterministic encryption for constant-time encrypted string equality (not FHE — leaks equality patterns)
 
 ### API
 
