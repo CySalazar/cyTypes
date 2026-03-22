@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes.Fhe\CyTypes.Fhe.csproj" />
     <ProjectReference Include="..\..\src\CyTypes.Primitives\CyTypes.Primitives.csproj" />
   </ItemGroup>
 </Project>

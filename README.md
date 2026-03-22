@@ -863,7 +863,7 @@ using var cy = new CyInt(42, policy);
 | `WithKeyStoreMinimumCapability(KeyStoreCapability)` | Minimum key store capability |
 | `Build()` | Validate and build the policy |
 
-> **Note:** FHE-based arithmetic/comparison modes (`HomomorphicFull`, `HomomorphicBasic`, `HomomorphicCircuit`, `HomomorphicEquality`) are reserved for Phase 3 and cannot be selected via the builder. Stream properties (`StreamChunkSize`, `RequireKeyExchange`, `StreamIntegrity`) are currently configured via the predefined policies and are not yet exposed on `SecurityPolicyBuilder`.
+> **Note:** FHE arithmetic modes (`HomomorphicBasic`, `HomomorphicFull`) are accepted by the builder with constraint validation: `HomomorphicBasic` requires at least `PinnedLocked` memory protection; `HomomorphicFull` additionally requires `AuditLevel.AllOperations`. FHE comparison (`HomomorphicCircuit`) and string (`HomomorphicEquality`) modes are reserved for Phase 3b. Stream properties (`StreamChunkSize`, `RequireKeyExchange`, `StreamIntegrity`) are currently configured via the predefined policies and are not yet exposed on `SecurityPolicyBuilder`.
 
 ## Taint Tracking
 
@@ -980,7 +980,7 @@ The `CyTypes.Fhe` package provides an initial FHE implementation using **Microso
 
 - **BFV scheme**: Integer addition, subtraction, multiplication, and negation on encrypted data — without decryption
 - **CKKS scheme**: Not yet supported (approximate arithmetic for floating-point)
-- **Limitations**: Homomorphic comparisons and string operations are not implemented. The Core `SecurityPolicyBuilder` does not yet accept FHE modes — direct use of the Fhe API is required
+- **Limitations**: Homomorphic comparisons and string operations are not implemented (Phase 3b). `SecurityPolicyBuilder` accepts BFV arithmetic modes (`HomomorphicBasic`/`HomomorphicFull`) with appropriate constraints; comparison and string FHE modes remain Phase 3b
 
 ### API
 
@@ -1046,9 +1046,9 @@ The cyTypes wrapper adds **< 1% overhead** over raw AES-GCM encryption. HMAC and
 | SecureBuffer alloc | 9-118x vs array | Expected (secure memory) |
 | FHE BFV encrypt | ~817x vs AES-GCM | Expected (homomorphic) |
 | JSON serialize (single) | ~108x | Expected (per-field encryption) |
-| ChunkedCryptoEngine (chunk encrypt) | Pending | Run with `--filter "*Stream*"` |
-| CyStream round-trip (MemoryStream) | Pending | Run with `--filter "*Stream*"` |
-| CyFileStream round-trip (disk I/O) | Pending | Run with `--filter "*Stream*"` |
+| ChunkedCryptoEngine (64 KB encrypt) | 5,315 MB/s | High throughput (AES-NI) |
+| CyStream round-trip (256 KB) | 1,024 MB/s | Includes header/footer/HMAC |
+| CyFileStream round-trip (256 KB) | 493 MB/s | Includes disk I/O |
 
 ### Running Benchmarks
 
@@ -1143,12 +1143,12 @@ dotnet run --project tests/CyTypes.Benchmarks -c Release
 |-------|---------|--------|
 | 1 | Core crypto, primitives, taint, policies | Complete |
 | 2 | Roslyn analyzer, secure collections, auto-redacting logging, EF Core | Complete |
-| 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | In Progress (~60%) |
+| 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | Complete |
 | 3b | FHE — CKKS support, comparison/string operations on ciphertexts | Planned |
 | 3c | PQC — ML-KEM-1024 key encapsulation (stub present, integration pending) | In Progress (~90%) |
 | 4 | Encrypted streaming — chunked AES-256-GCM, file I/O, IPC (named pipes), TCP, hybrid key exchange | Complete |
 
-> **Phase 3 status:** The `CyTypes.Fhe` package exists with a working `SealBfvEngine` for integer arithmetic on BFV ciphertexts, but `SecurityPolicyBuilder` still rejects FHE modes — direct use of the Fhe package API is required. CKKS (approximate arithmetic) and homomorphic comparisons/string operations are not yet implemented. ML-KEM-1024 key encapsulation (`MlKemKeyEncapsulation`) is registered via DI but not yet wired into the encryption pipeline. Phase 3 focuses on completing these integrations for production use.
+> **Phase 3 status:** Phase 3a is complete. The `CyTypes.Fhe` package provides a working `SealBfvEngine` for integer arithmetic (add, subtract, multiply, negate) on BFV ciphertexts, with full `SecurityPolicyBuilder` integration for `HomomorphicBasic` and `HomomorphicFull` arithmetic modes. CKKS (approximate arithmetic for floating-point types), homomorphic comparisons, and string operations are planned for Phase 3b. ML-KEM-1024 key encapsulation (`MlKemKeyEncapsulation`) is registered via DI but not yet wired into the encryption pipeline (~90%).
 
 ## Contributing
 

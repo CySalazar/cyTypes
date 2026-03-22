@@ -11,7 +11,7 @@ namespace CyTypes.Primitives;
 public sealed partial class CyDouble : CyTypeBase<CyDouble, double>, ICyNumeric<CyDouble>, IComparable<CyDouble>, IEquatable<CyDouble>
 {
     /// <summary>Indicates whether fully homomorphic encryption is supported.</summary>
-    [Obsolete("FHE support is not yet implemented. Planned for Phase 3 (SEAL integration). This property always returns false.")]
+    [Obsolete("Floating-point FHE requires the CKKS scheme (Phase 3b). BFV supports integer types only. This property always returns false.")]
     public bool SupportsFhe => false;
 
     /// <summary>Initializes a new <see cref="CyDouble"/> by encrypting the specified value.</summary>
