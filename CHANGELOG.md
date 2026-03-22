@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-03-22
+
+### Fixed
+- FHE integration test race condition: `CkksIntegrationTests` and `FheIntegrationTests` now run in a serialized xUnit collection to prevent parallel `FheEngineProvider.Configure()`/`Reset()` conflicts
+
 ## [2.2.0] - 2026-03-22
 
 ### Added

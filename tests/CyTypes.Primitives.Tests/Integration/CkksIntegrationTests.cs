@@ -9,6 +9,7 @@ using Xunit;
 
 namespace CyTypes.Primitives.Tests.Integration;
 
+[Collection("FHE")]
 public sealed class CkksIntegrationTests : IDisposable
 {
     private readonly SealKeyManager _keyManager;

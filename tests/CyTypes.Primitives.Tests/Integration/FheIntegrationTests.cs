@@ -13,6 +13,7 @@ namespace CyTypes.Primitives.Tests.Integration;
 /// End-to-end tests verifying the full FHE integration path:
 /// SecurityPolicyBuilder → CyInt operators → FheEngineProvider → SealBfvEngine.
 /// </summary>
+[Collection("FHE")]
 public sealed class FheIntegrationTests : IDisposable
 {
     private readonly SealKeyManager _keyManager;
