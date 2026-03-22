@@ -1,25 +1,29 @@
+using CyTypes.Core.Crypto.Interfaces;
 using CyTypes.Core.Policy;
+using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
 
 public sealed partial class CyDouble
 {
+    private enum FheOp { Add, Subtract, Multiply, None }
+
     /// <summary>Implicitly converts a native <see cref="double"/> to a <see cref="CyDouble"/>.</summary>
     public static implicit operator CyDouble(double value) => new(value);
     /// <summary>Explicitly decrypts a <see cref="CyDouble"/> to a native <see cref="double"/>.</summary>
     public static explicit operator double(CyDouble cy) => cy.ToInsecureDouble();
 
     /// <summary>Adds two <see cref="CyDouble"/> values.</summary>
-    public static CyDouble operator +(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a + b);
+    public static CyDouble operator +(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a + b, FheOp.Add);
     /// <summary>Subtracts two <see cref="CyDouble"/> values.</summary>
-    public static CyDouble operator -(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a - b);
+    public static CyDouble operator -(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a - b, FheOp.Subtract);
     /// <summary>Multiplies two <see cref="CyDouble"/> values.</summary>
-    public static CyDouble operator *(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a * b);
+    public static CyDouble operator *(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a * b, FheOp.Multiply);
     /// <summary>Divides two <see cref="CyDouble"/> values.</summary>
-    public static CyDouble operator /(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a / b);
+    public static CyDouble operator /(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a / b, FheOp.None);
     /// <summary>Computes the remainder of two <see cref="CyDouble"/> values.</summary>
-    public static CyDouble operator %(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a % b);
+    public static CyDouble operator %(CyDouble left, CyDouble right) => BinaryOp(left, right, (a, b) => a % b, FheOp.None);
 
     // === Unary Operators ===
 
@@ -92,20 +96,70 @@ public sealed partial class CyDouble
     /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
-    private static CyDouble BinaryOp(CyDouble left, CyDouble right, Func<double, double, double> op)
+    private static CyDouble BinaryOp(CyDouble left, CyDouble right, Func<double, double, double> op, FheOp fheOp)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
         var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
         var taint = left.IsCompromised || left.IsTainted || right.IsCompromised || right.IsTainted;
-        var result = new CyDouble(op(left.DecryptValue(), right.DecryptValue()), resolved);
-        if (taint) result.MarkTainted();
-        return result;
+
+        // FHE path: operate directly on ciphertexts via CKKS engine
+        if (fheOp != FheOp.None && left.IsFheMode && right.IsFheMode &&
+            resolved.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull)
+        {
+            var engine = FheEngineProvider.GetFloatingPointEngine()
+                ?? throw new InvalidOperationException("CKKS FHE engine not configured. Register via AddCyTypesCkks().");
+
+            var leftBytes = left.GetEncryptedBytes();
+            var rightBytes = right.GetEncryptedBytes();
+
+            var resultBytes = fheOp switch
+            {
+                FheOp.Add => engine.Add(leftBytes, rightBytes),
+                FheOp.Subtract => engine.Subtract(leftBytes, rightBytes),
+                FheOp.Multiply => engine.Multiply(leftBytes, rightBytes),
+                _ => throw new InvalidOperationException($"Unexpected FHE operation: {fheOp}")
+            };
+
+            var result = new CyDouble(resultBytes, resolved);
+            if (taint) result.MarkTainted();
+            return result;
+        }
+
+        // SecureEnclave path: decrypt, compute, re-encrypt
+        var enclaveResult = new CyDouble(op(left.DecryptValue(), right.DecryptValue()), resolved);
+        if (taint) enclaveResult.MarkTainted();
+        return enclaveResult;
     }
 
     private static bool CompareOp(CyDouble left, CyDouble right, Func<double, double, bool> op)
-        => op(left.DecryptValue(), right.DecryptValue());
+    {
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.Comparison == ComparisonMode.HomomorphicCircuit &&
+            left.IsFheMode && right.IsFheMode)
+        {
+            var compEngine = FheEngineProvider.GetComparisonEngine()
+                ?? throw new InvalidOperationException("FHE comparison engine not configured.");
+            var diff = compEngine.ComputeDifference(left.GetEncryptedBytes(), right.GetEncryptedBytes());
+            var sign = compEngine.DecryptComparison(diff);
+            return op(sign, 0);
+        }
+
+        return op(left.DecryptValue(), right.DecryptValue());
+    }
 
     private static bool ConstantTimeEquals(CyDouble left, CyDouble right)
-        => ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
+    {
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.Comparison == ComparisonMode.HomomorphicCircuit &&
+            left.IsFheMode && right.IsFheMode)
+        {
+            var compEngine = FheEngineProvider.GetComparisonEngine()
+                ?? throw new InvalidOperationException("FHE comparison engine not configured.");
+            var diff = compEngine.ComputeDifference(left.GetEncryptedBytes(), right.GetEncryptedBytes());
+            return compEngine.DecryptEquality(diff, 1e-10);
+        }
+
+        return ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
+    }
 }

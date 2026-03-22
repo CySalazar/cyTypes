@@ -1,5 +1,6 @@
 using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
+using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
@@ -10,12 +11,18 @@ namespace CyTypes.Primitives;
 /// </summary>
 public sealed partial class CyDecimal : CyTypeBase<CyDecimal, decimal>, ICyNumeric<CyDecimal>, IComparable<CyDecimal>, IEquatable<CyDecimal>
 {
-    /// <summary>Indicates whether fully homomorphic encryption is supported (currently always false).</summary>
-    [Obsolete("Floating-point FHE requires the CKKS scheme (Phase 3b). BFV supports integer types only. This property always returns false.")]
-    public bool SupportsFhe => false;
+    /// <summary>
+    /// Indicates whether fully homomorphic encryption is supported for this instance's policy.
+    /// CKKS uses approximate arithmetic (~15 significant digits); decimal's 28-29 digit precision is NOT preserved.
+    /// </summary>
+    public bool SupportsFhe => Policy.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull;
 
     /// <summary>Initializes a new <see cref="CyDecimal"/> with the specified decimal value.</summary>
     public CyDecimal(decimal value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyDecimal"/> from pre-existing FHE ciphertext bytes.</summary>
+    internal CyDecimal(byte[] fheCiphertext, SecurityPolicy policy)
+        : base(fheCiphertext, policy, default(FheCiphertextTag)) { }
 
     /// <summary>Initializes a new <see cref="CyDecimal"/> by cloning encrypted data without decryption.</summary>
     internal CyDecimal(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)

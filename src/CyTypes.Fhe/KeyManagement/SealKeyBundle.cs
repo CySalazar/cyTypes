@@ -16,14 +16,18 @@ public sealed class SealKeyBundle : IDisposable
     /// <summary>Gets the serialized relinearization keys.</summary>
     public byte[] RelinKeys { get; }
 
+    /// <summary>Gets the serialized Galois keys (for CKKS rotation operations), or null if BFV-only.</summary>
+    public byte[]? GaloisKeys { get; }
+
     private bool _disposed;
 
     /// <summary>Initializes a new key bundle with the specified serialized keys.</summary>
-    public SealKeyBundle(byte[] publicKey, byte[] secretKey, byte[] relinKeys)
+    public SealKeyBundle(byte[] publicKey, byte[] secretKey, byte[] relinKeys, byte[]? galoisKeys = null)
     {
         PublicKey = publicKey ?? throw new ArgumentNullException(nameof(publicKey));
         SecretKey = secretKey ?? throw new ArgumentNullException(nameof(secretKey));
         RelinKeys = relinKeys ?? throw new ArgumentNullException(nameof(relinKeys));
+        GaloisKeys = galoisKeys;
     }
 
     /// <summary>Releases key material if Dispose was not called.</summary>
@@ -40,6 +44,8 @@ public sealed class SealKeyBundle : IDisposable
         CryptographicOperations.ZeroMemory(SecretKey);
         CryptographicOperations.ZeroMemory(PublicKey);
         CryptographicOperations.ZeroMemory(RelinKeys);
+        if (GaloisKeys != null)
+            CryptographicOperations.ZeroMemory(GaloisKeys);
         GC.SuppressFinalize(this);
     }
 }

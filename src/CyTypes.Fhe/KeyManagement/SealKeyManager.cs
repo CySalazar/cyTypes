@@ -5,7 +5,7 @@ namespace CyTypes.Fhe.KeyManagement;
 
 /// <summary>
 /// Manages SEAL context, key generation, and serialization for FHE operations.
-/// Thread-safe via locking.
+/// Supports both BFV and CKKS schemes. Thread-safe via locking.
 /// </summary>
 public sealed class SealKeyManager : IDisposable
 {
@@ -15,8 +15,10 @@ public sealed class SealKeyManager : IDisposable
     private Microsoft.Research.SEAL.PublicKey? _publicKey;
     private SecretKey? _secretKey;
     private RelinKeys? _relinKeys;
+    private Microsoft.Research.SEAL.GaloisKeys? _galoisKeys;
     private bool _disposed;
     private bool _initialized;
+    private FheScheme _scheme;
 
     /// <summary>Gets the SEAL context, or null if not initialized.</summary>
     public SEALContext? Context
@@ -42,10 +44,22 @@ public sealed class SealKeyManager : IDisposable
         get { lock (_lock) { return _relinKeys; } }
     }
 
+    /// <summary>Gets the Galois keys (for CKKS rotation operations), or null if not initialized or BFV.</summary>
+    public Microsoft.Research.SEAL.GaloisKeys? GaloisKeys
+    {
+        get { lock (_lock) { return _galoisKeys; } }
+    }
+
     /// <summary>Gets whether this manager has been initialized.</summary>
     public bool IsInitialized
     {
         get { lock (_lock) { return _initialized; } }
+    }
+
+    /// <summary>Gets the FHE scheme used by this manager.</summary>
+    public FheScheme Scheme
+    {
+        get { lock (_lock) { return _scheme; } }
     }
 
     /// <summary>
@@ -55,9 +69,6 @@ public sealed class SealKeyManager : IDisposable
     {
         ArgumentNullException.ThrowIfNull(parms);
 
-        if (scheme != FheScheme.BFV)
-            throw new NotSupportedException($"FHE scheme '{scheme}' is not yet supported. Use BFV.");
-
         lock (_lock)
         {
             if (_initialized)
@@ -65,12 +76,20 @@ public sealed class SealKeyManager : IDisposable
 
             _context = new SEALContext(parms);
             _keyGen = new KeyGenerator(_context);
+            _scheme = scheme;
 
             _keyGen.CreatePublicKey(out var pk);
             _publicKey = pk;
             _secretKey = _keyGen.SecretKey;
             _keyGen.CreateRelinKeys(out var rk);
             _relinKeys = rk;
+
+            // CKKS needs GaloisKeys for rotation operations
+            if (scheme == FheScheme.CKKS)
+            {
+                _keyGen.CreateGaloisKeys(out var gk);
+                _galoisKeys = gk;
+            }
 
             _initialized = true;
         }
@@ -95,7 +114,15 @@ public sealed class SealKeyManager : IDisposable
             using var rkStream = new MemoryStream();
             _relinKeys.Save(rkStream);
 
-            return new SealKeyBundle(pkStream.ToArray(), skStream.ToArray(), rkStream.ToArray());
+            byte[]? gkData = null;
+            if (_galoisKeys != null)
+            {
+                using var gkStream = new MemoryStream();
+                _galoisKeys.Save(gkStream);
+                gkData = gkStream.ToArray();
+            }
+
+            return new SealKeyBundle(pkStream.ToArray(), skStream.ToArray(), rkStream.ToArray(), gkData);
         }
     }
 
@@ -108,12 +135,14 @@ public sealed class SealKeyManager : IDisposable
             if (_disposed) return;
             _disposed = true;
 
+            _galoisKeys?.Dispose();
             _relinKeys?.Dispose();
             _publicKey?.Dispose();
             _secretKey?.Dispose();
             _keyGen?.Dispose();
             _context?.Dispose();
 
+            _galoisKeys = null;
             _relinKeys = null;
             _publicKey = null;
             _secretKey = null;

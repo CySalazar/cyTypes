@@ -1,5 +1,6 @@
 using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
+using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
@@ -10,12 +11,15 @@ namespace CyTypes.Primitives;
 /// </summary>
 public sealed partial class CyDouble : CyTypeBase<CyDouble, double>, ICyNumeric<CyDouble>, IComparable<CyDouble>, IEquatable<CyDouble>
 {
-    /// <summary>Indicates whether fully homomorphic encryption is supported.</summary>
-    [Obsolete("Floating-point FHE requires the CKKS scheme (Phase 3b). BFV supports integer types only. This property always returns false.")]
-    public bool SupportsFhe => false;
+    /// <summary>Indicates whether fully homomorphic encryption is supported for this instance's policy.</summary>
+    public bool SupportsFhe => Policy.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull;
 
     /// <summary>Initializes a new <see cref="CyDouble"/> by encrypting the specified value.</summary>
     public CyDouble(double value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyDouble"/> from pre-existing FHE ciphertext bytes.</summary>
+    internal CyDouble(byte[] fheCiphertext, SecurityPolicy policy)
+        : base(fheCiphertext, policy, default(FheCiphertextTag)) { }
 
     /// <summary>Initializes a new <see cref="CyDouble"/> by cloning encrypted data without decryption.</summary>
     internal CyDouble(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)

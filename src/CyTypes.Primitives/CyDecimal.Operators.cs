@@ -1,25 +1,29 @@
+using CyTypes.Core.Crypto.Interfaces;
 using CyTypes.Core.Policy;
+using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
 
 public sealed partial class CyDecimal
 {
+    private enum FheOp { Add, Subtract, Multiply, None }
+
     /// <summary>Implicitly converts a <see cref="decimal"/> to a <see cref="CyDecimal"/>.</summary>
     public static implicit operator CyDecimal(decimal value) => new(value);
     /// <summary>Explicitly converts a <see cref="CyDecimal"/> to a <see cref="decimal"/>. Marks compromise.</summary>
     public static explicit operator decimal(CyDecimal cy) => cy.ToInsecureDecimal();
 
     /// <summary>Adds two <see cref="CyDecimal"/> values.</summary>
-    public static CyDecimal operator +(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a + b);
+    public static CyDecimal operator +(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a + b, FheOp.Add);
     /// <summary>Subtracts the right <see cref="CyDecimal"/> from the left.</summary>
-    public static CyDecimal operator -(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a - b);
+    public static CyDecimal operator -(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a - b, FheOp.Subtract);
     /// <summary>Multiplies two <see cref="CyDecimal"/> values.</summary>
-    public static CyDecimal operator *(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a * b);
+    public static CyDecimal operator *(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a * b, FheOp.Multiply);
     /// <summary>Divides the left <see cref="CyDecimal"/> by the right.</summary>
-    public static CyDecimal operator /(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a / b);
+    public static CyDecimal operator /(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a / b, FheOp.None);
     /// <summary>Returns the remainder of dividing the left <see cref="CyDecimal"/> by the right.</summary>
-    public static CyDecimal operator %(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a % b);
+    public static CyDecimal operator %(CyDecimal left, CyDecimal right) => BinaryOp(left, right, (a, b) => a % b, FheOp.None);
 
     // === Unary Operators ===
 
@@ -92,20 +96,71 @@ public sealed partial class CyDecimal
     /// </summary>
     public override int GetHashCode() => InstanceId.GetHashCode();
 
-    private static CyDecimal BinaryOp(CyDecimal left, CyDecimal right, Func<decimal, decimal, decimal> op)
+    private static CyDecimal BinaryOp(CyDecimal left, CyDecimal right, Func<decimal, decimal, decimal> op, FheOp fheOp)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
         var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
         var taint = left.IsCompromised || left.IsTainted || right.IsCompromised || right.IsTainted;
-        var result = new CyDecimal(op(left.DecryptValue(), right.DecryptValue()), resolved);
-        if (taint) result.MarkTainted();
-        return result;
+
+        // FHE path: operate directly on ciphertexts via CKKS engine
+        // NOTE: CKKS approximate arithmetic means decimal precision (28-29 digits) is NOT preserved.
+        if (fheOp != FheOp.None && left.IsFheMode && right.IsFheMode &&
+            resolved.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull)
+        {
+            var engine = FheEngineProvider.GetFloatingPointEngine()
+                ?? throw new InvalidOperationException("CKKS FHE engine not configured. Register via AddCyTypesCkks().");
+
+            var leftBytes = left.GetEncryptedBytes();
+            var rightBytes = right.GetEncryptedBytes();
+
+            var resultBytes = fheOp switch
+            {
+                FheOp.Add => engine.Add(leftBytes, rightBytes),
+                FheOp.Subtract => engine.Subtract(leftBytes, rightBytes),
+                FheOp.Multiply => engine.Multiply(leftBytes, rightBytes),
+                _ => throw new InvalidOperationException($"Unexpected FHE operation: {fheOp}")
+            };
+
+            var result = new CyDecimal(resultBytes, resolved);
+            if (taint) result.MarkTainted();
+            return result;
+        }
+
+        // SecureEnclave path: decrypt, compute, re-encrypt
+        var enclaveResult = new CyDecimal(op(left.DecryptValue(), right.DecryptValue()), resolved);
+        if (taint) enclaveResult.MarkTainted();
+        return enclaveResult;
     }
 
     private static bool CompareOp(CyDecimal left, CyDecimal right, Func<decimal, decimal, bool> op)
-        => op(left.DecryptValue(), right.DecryptValue());
+    {
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.Comparison == ComparisonMode.HomomorphicCircuit &&
+            left.IsFheMode && right.IsFheMode)
+        {
+            var compEngine = FheEngineProvider.GetComparisonEngine()
+                ?? throw new InvalidOperationException("FHE comparison engine not configured.");
+            var diff = compEngine.ComputeDifference(left.GetEncryptedBytes(), right.GetEncryptedBytes());
+            var sign = compEngine.DecryptComparison(diff);
+            return op(sign, 0);
+        }
+
+        return op(left.DecryptValue(), right.DecryptValue());
+    }
 
     private static bool ConstantTimeEquals(CyDecimal left, CyDecimal right)
-        => ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
+    {
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.Comparison == ComparisonMode.HomomorphicCircuit &&
+            left.IsFheMode && right.IsFheMode)
+        {
+            var compEngine = FheEngineProvider.GetComparisonEngine()
+                ?? throw new InvalidOperationException("FHE comparison engine not configured.");
+            var diff = compEngine.ComputeDifference(left.GetEncryptedBytes(), right.GetEncryptedBytes());
+            return compEngine.DecryptEquality(diff, 1e-7);
+        }
+
+        return ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
+    }
 }

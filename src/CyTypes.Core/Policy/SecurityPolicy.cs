@@ -169,8 +169,8 @@ public sealed class SecurityPolicy
         streamIntegrity: StreamIntegrityMode.PerChunkOnly);
 
     /// <summary>
-    /// Homomorphic basic policy. Enables FHE arithmetic (add, subtract, multiply) on integer types.
-    /// Requires PinnedLocked memory and standard taint propagation.
+    /// Homomorphic basic policy. Enables FHE arithmetic (add, subtract, multiply) on integer
+    /// and floating-point types. Requires PinnedLocked memory and standard taint propagation.
     /// </summary>
     public static SecurityPolicy HomomorphicBasic { get; } = new(
         name: "HomomorphicBasic",
@@ -180,6 +180,23 @@ public sealed class SecurityPolicy
         memory: MemoryProtection.PinnedLocked,
         keyRotation: KeyRotationPolicy.EveryNOperations(1000),
         audit: AuditLevel.DecryptionsAndTransfers,
+        taint: TaintMode.Standard,
+        maxDecryptionCount: 1000,
+        autoDestroy: false,
+        allowDemotion: false);
+
+    /// <summary>
+    /// Homomorphic full policy. Enables FHE arithmetic, homomorphic comparisons,
+    /// and deterministic string equality. Requires AllOperations audit level.
+    /// </summary>
+    public static SecurityPolicy HomomorphicFull { get; } = new(
+        name: "HomomorphicFull",
+        arithmetic: ArithmeticMode.HomomorphicFull,
+        comparison: ComparisonMode.HomomorphicCircuit,
+        stringOperations: StringOperationMode.HomomorphicEquality,
+        memory: MemoryProtection.PinnedLocked,
+        keyRotation: KeyRotationPolicy.EveryNOperations(1000),
+        audit: AuditLevel.AllOperations,
         taint: TaintMode.Standard,
         maxDecryptionCount: 1000,
         autoDestroy: false,

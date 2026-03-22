@@ -32,14 +32,27 @@ public sealed class SealKeyManagerTests
     }
 
     [Fact]
-    public void Initialize_CKKS_throws_NotSupportedException()
+    public void Initialize_CKKS_creates_context_keys_and_galoisKeys()
     {
         using var km = new SealKeyManager();
+        km.Initialize(FheScheme.CKKS, SealParameterPresets.Ckks128Bit());
 
-        var act = () => km.Initialize(FheScheme.CKKS, SealParameterPresets.Bfv128Bit());
+        km.IsInitialized.Should().BeTrue();
+        km.Scheme.Should().Be(FheScheme.CKKS);
+        km.Context.Should().NotBeNull();
+        km.PublicKey.Should().NotBeNull();
+        km.SecretKey.Should().NotBeNull();
+        km.RelinKeys.Should().NotBeNull();
+        km.GaloisKeys.Should().NotBeNull();
+    }
 
-        act.Should().Throw<NotSupportedException>()
-            .WithMessage("*CKKS*");
+    [Fact]
+    public void Initialize_BFV_does_not_create_galoisKeys()
+    {
+        using var km = new SealKeyManager();
+        km.Initialize(FheScheme.BFV, SealParameterPresets.Bfv128Bit());
+
+        km.GaloisKeys.Should().BeNull();
     }
 
     [Fact]

@@ -85,6 +85,67 @@ public static class CyTypesServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers the CKKS floating-point FHE engine. Call this after <see cref="AddCyTypes"/>
+    /// to enable homomorphic encryption on floating-point types (CyFloat, CyDouble, CyDecimal).
+    /// </summary>
+    public static IServiceCollection AddCyTypesCkks(
+        this IServiceCollection services,
+        Func<IServiceProvider, IFheFloatingPointEngine> configureCkksEngine)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configureCkksEngine);
+
+        services.TryAddSingleton(sp =>
+        {
+            var engine = configureCkksEngine(sp);
+            Primitives.Shared.FheEngineProvider.Configure(engine);
+            return engine;
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the homomorphic comparison engine for <see cref="CyTypes.Core.Policy.Components.ComparisonMode.HomomorphicCircuit"/>.
+    /// </summary>
+    public static IServiceCollection AddCyTypesHomomorphicComparison(
+        this IServiceCollection services,
+        Func<IServiceProvider, IFheComparisonEngine> configureComparisonEngine)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configureComparisonEngine);
+
+        services.TryAddSingleton(sp =>
+        {
+            var engine = configureComparisonEngine(sp);
+            Primitives.Shared.FheEngineProvider.Configure(engine);
+            return engine;
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the deterministic encryption engine for <see cref="CyTypes.Core.Policy.Components.StringOperationMode.HomomorphicEquality"/>.
+    /// </summary>
+    public static IServiceCollection AddCyTypesHomomorphicStringEquality(
+        this IServiceCollection services,
+        Func<IServiceProvider, IDeterministicEncryptionEngine> configureDetEngine)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configureDetEngine);
+
+        services.TryAddSingleton(sp =>
+        {
+            var engine = configureDetEngine(sp);
+            Primitives.Shared.FheEngineProvider.Configure(engine);
+            return engine;
+        });
+
+        return services;
+    }
+
+    /// <summary>
     /// Minimal <see cref="ILoggerProvider"/> adapter that delegates to <see cref="ILoggerFactory"/>.
     /// Used to wrap the host's logging pipeline under the redacting layer.
     /// </summary>

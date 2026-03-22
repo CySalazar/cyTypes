@@ -109,6 +109,18 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
 
         if (_isFheMode)
         {
+            // CKKS path for floating-point types
+            if (IsFloatingPointType)
+            {
+                var fpEngine = FheEngineProvider.GetFloatingPointEngine()
+                    ?? throw new InvalidOperationException("CKKS FHE engine not configured. Register via AddCyTypesCkks().");
+                var doubleVal = ConvertToDouble(value);
+                var ciphertext = fpEngine.Encrypt(doubleVal);
+                SetEncryptedBytes(ciphertext);
+                return;
+            }
+
+            // BFV path for integer types
             var fheEngine = FheEngineProvider.Current
                 ?? throw new InvalidOperationException("FHE engine not configured. Register via AddCyTypesFhe().");
             var plainBytes = SerializeValue(value);
@@ -152,12 +164,31 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
 
         if (_isFheMode)
         {
+            // CKKS path for floating-point types
+            if (IsFloatingPointType)
+            {
+                var fpEngine = FheEngineProvider.GetFloatingPointEngine()
+                    ?? throw new InvalidOperationException("CKKS FHE engine not configured. Register via AddCyTypesCkks().");
+                var cipherBytes = _encryptedData.ToArray();
+                try
+                {
+                    double doubleVal = fpEngine.Decrypt(cipherBytes);
+                    return ConvertFromDouble(doubleVal);
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(cipherBytes);
+                    Security.IncrementDecryption();
+                }
+            }
+
+            // BFV path for integer types
             var fheEngine = FheEngineProvider.Current
                 ?? throw new InvalidOperationException("FHE engine not configured. Register via AddCyTypesFhe().");
-            var cipherBytes = _encryptedData.ToArray();
+            var bfvCipherBytes = _encryptedData.ToArray();
             try
             {
-                long longVal = fheEngine.Decrypt(cipherBytes);
+                long longVal = fheEngine.Decrypt(bfvCipherBytes);
                 var resultBytes = ConvertFromLong(longVal);
                 try
                 {
@@ -170,7 +201,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
             }
             finally
             {
-                CryptographicOperations.ZeroMemory(cipherBytes);
+                CryptographicOperations.ZeroMemory(bfvCipherBytes);
                 Security.IncrementDecryption();
             }
         }
@@ -206,6 +237,10 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <summary>Gets whether this instance uses FHE mode.</summary>
     internal bool IsFheMode => _isFheMode;
 
+    /// <summary>Gets whether TNative is a floating-point type (float, double, decimal).</summary>
+    private static bool IsFloatingPointType =>
+        typeof(TNative) == typeof(float) || typeof(TNative) == typeof(double) || typeof(TNative) == typeof(decimal);
+
     private static long ConvertToLong(byte[] data) => data.Length switch
     {
         4 => BitConverter.ToInt32(data),
@@ -219,6 +254,28 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         if (typeof(TNative) == typeof(int))
             return BitConverter.GetBytes((int)value);
         return BitConverter.GetBytes(value);
+    }
+
+    private static double ConvertToDouble(TNative value)
+    {
+        if (typeof(TNative) == typeof(float))
+            return (double)(float)(object)value!;
+        if (typeof(TNative) == typeof(double))
+            return (double)(object)value!;
+        if (typeof(TNative) == typeof(decimal))
+            return (double)(decimal)(object)value!;
+        throw new NotSupportedException($"Cannot convert {typeof(TNative).Name} to double for CKKS FHE.");
+    }
+
+    private static TNative ConvertFromDouble(double value)
+    {
+        if (typeof(TNative) == typeof(float))
+            return (TNative)(object)(float)value;
+        if (typeof(TNative) == typeof(double))
+            return (TNative)(object)value;
+        if (typeof(TNative) == typeof(decimal))
+            return (TNative)(object)(decimal)value;
+        throw new NotSupportedException($"Cannot convert double to {typeof(TNative).Name} from CKKS FHE.");
     }
 
     /// <summary>Serializes the native value to a byte array for encryption.</summary>

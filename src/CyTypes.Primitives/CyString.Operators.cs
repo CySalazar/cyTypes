@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using CyTypes.Core.Policy;
+using CyTypes.Core.Policy.Components;
+using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
 
@@ -32,11 +34,35 @@ public sealed partial class CyString
     /// <summary>
     /// Constant-time equality operator. Uses <see cref="CryptographicOperations.FixedTimeEquals"/>
     /// to prevent timing side-channel attacks. Does not early-exit on length difference.
+    /// When <see cref="StringOperationMode.HomomorphicEquality"/> is active, compares deterministic
+    /// ciphertexts without decryption.
     /// </summary>
     public static bool operator ==(CyString? left, CyString? right)
     {
         if (left is null && right is null) return true;
         if (left is null || right is null) return false;
+
+        // HomomorphicEquality path: compare deterministic ciphertexts without decryption
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.StringOperations == StringOperationMode.HomomorphicEquality)
+        {
+            var detEngine = FheEngineProvider.GetDeterministicEngine()
+                ?? throw new InvalidOperationException("Deterministic encryption engine not configured. Register via AddCyTypesHomomorphicStringEquality().");
+
+            byte[] leftPlain = Encoding.UTF8.GetBytes(left.DecryptValue());
+            byte[] rightPlain = Encoding.UTF8.GetBytes(right.DecryptValue());
+            try
+            {
+                var leftCipher = detEngine.EncryptDeterministic(leftPlain);
+                var rightCipher = detEngine.EncryptDeterministic(rightPlain);
+                return detEngine.CiphertextEquals(leftCipher, rightCipher);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(leftPlain);
+                CryptographicOperations.ZeroMemory(rightPlain);
+            }
+        }
 
         // SECURITY: Use constant-time comparison on UTF-8 bytes.
         // No early-exit on Length — that would leak length information.

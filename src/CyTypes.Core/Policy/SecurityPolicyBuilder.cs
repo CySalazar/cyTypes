@@ -97,19 +97,20 @@ public sealed class SecurityPolicyBuilder
 
     private void Validate()
     {
-        // Phase 3b FHE modes are not yet available
-        if (_comparison == ComparisonMode.HomomorphicCircuit)
+        // HomomorphicCircuit comparison requires an FHE arithmetic mode
+        if (_comparison == ComparisonMode.HomomorphicCircuit &&
+            _arithmetic is not (ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull))
         {
             throw new PolicyViolationException(
-                "ComparisonMode.HomomorphicCircuit requires FHE support which is not yet available (Phase 3b). " +
-                "Use ComparisonMode.HmacBased or ComparisonMode.SecureEnclave.");
+                "ComparisonMode.HomomorphicCircuit requires ArithmeticMode.HomomorphicBasic or HomomorphicFull.");
         }
 
-        if (_stringOperations == StringOperationMode.HomomorphicEquality)
+        // HomomorphicEquality string ops require at least PinnedLocked memory protection
+        if (_stringOperations == StringOperationMode.HomomorphicEquality &&
+            _memory > MemoryProtection.PinnedLocked)
         {
             throw new PolicyViolationException(
-                "StringOperationMode.HomomorphicEquality requires FHE support which is not yet available (Phase 3b). " +
-                "Use StringOperationMode.SecureEnclave.");
+                "StringOperationMode.HomomorphicEquality requires at least PinnedLocked memory protection.");
         }
 
         // FHE arithmetic modes require at least PinnedLocked memory protection

@@ -148,7 +148,7 @@ public class SecurityPolicyBuilderTests
     }
 
     [Fact]
-    public void Build_HomomorphicCircuitComparison_ThrowsPolicyViolationException()
+    public void Build_HomomorphicCircuitComparison_WithoutFheArithmetic_ThrowsPolicyViolationException()
     {
         var builder = new SecurityPolicyBuilder()
             .WithComparisonMode(ComparisonMode.HomomorphicCircuit);
@@ -156,19 +156,45 @@ public class SecurityPolicyBuilderTests
         var act = () => builder.Build();
 
         act.Should().Throw<PolicyViolationException>()
-            .WithMessage("*Phase 3b*");
+            .WithMessage("*HomomorphicBasic*");
     }
 
     [Fact]
-    public void Build_HomomorphicEqualityStringOps_ThrowsPolicyViolationException()
+    public void Build_HomomorphicCircuitComparison_WithFheArithmetic_Succeeds()
     {
         var builder = new SecurityPolicyBuilder()
-            .WithStringOperationMode(StringOperationMode.HomomorphicEquality);
+            .WithComparisonMode(ComparisonMode.HomomorphicCircuit)
+            .WithArithmeticMode(ArithmeticMode.HomomorphicBasic)
+            .WithMemoryProtection(MemoryProtection.PinnedLocked);
+
+        var policy = builder.Build();
+
+        policy.Comparison.Should().Be(ComparisonMode.HomomorphicCircuit);
+    }
+
+    [Fact]
+    public void Build_HomomorphicEqualityStringOps_WithWeakMemory_ThrowsPolicyViolationException()
+    {
+        var builder = new SecurityPolicyBuilder()
+            .WithStringOperationMode(StringOperationMode.HomomorphicEquality)
+            .WithMemoryProtection(MemoryProtection.PinnedOnly);
 
         var act = () => builder.Build();
 
         act.Should().Throw<PolicyViolationException>()
-            .WithMessage("*Phase 3b*");
+            .WithMessage("*PinnedLocked*");
+    }
+
+    [Fact]
+    public void Build_HomomorphicEqualityStringOps_WithPinnedLocked_Succeeds()
+    {
+        var builder = new SecurityPolicyBuilder()
+            .WithStringOperationMode(StringOperationMode.HomomorphicEquality)
+            .WithMemoryProtection(MemoryProtection.PinnedLocked);
+
+        var policy = builder.Build();
+
+        policy.StringOperations.Should().Be(StringOperationMode.HomomorphicEquality);
     }
 
     [Fact]

@@ -183,8 +183,33 @@ public sealed partial class CyLong
     }
 
     private static bool CompareOp(CyLong left, CyLong right, Func<long, long, bool> op)
-        => op(left.DecryptValue(), right.DecryptValue());
+    {
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.Comparison == ComparisonMode.HomomorphicCircuit &&
+            left.IsFheMode && right.IsFheMode)
+        {
+            var compEngine = FheEngineProvider.GetComparisonEngine()
+                ?? throw new InvalidOperationException("FHE comparison engine not configured.");
+            var diff = compEngine.ComputeDifference(left.GetEncryptedBytes(), right.GetEncryptedBytes());
+            var sign = compEngine.DecryptComparison(diff);
+            return op(sign, 0);
+        }
+
+        return op(left.DecryptValue(), right.DecryptValue());
+    }
 
     private static bool ConstantTimeEquals(CyLong left, CyLong right)
-        => ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
+    {
+        var resolved = PolicyResolver.Resolve(left.Policy, right.Policy, allowStrictCrossPolicy: true);
+        if (resolved.Comparison == ComparisonMode.HomomorphicCircuit &&
+            left.IsFheMode && right.IsFheMode)
+        {
+            var compEngine = FheEngineProvider.GetComparisonEngine()
+                ?? throw new InvalidOperationException("FHE comparison engine not configured.");
+            var diff = compEngine.ComputeDifference(left.GetEncryptedBytes(), right.GetEncryptedBytes());
+            return compEngine.DecryptEquality(diff);
+        }
+
+        return ConstantTimeCompare.Equals(left.DecryptValue(), right.DecryptValue());
+    }
 }

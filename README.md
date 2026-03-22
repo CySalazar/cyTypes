@@ -1144,11 +1144,11 @@ dotnet run --project tests/CyTypes.Benchmarks -c Release
 | 1 | Core crypto, primitives, taint, policies | Complete |
 | 2 | Roslyn analyzer, secure collections, auto-redacting logging, EF Core | Complete |
 | 3a | FHE — Microsoft SEAL BFV integration (`CyTypes.Fhe` package) | Complete |
-| 3b | FHE — CKKS support, comparison/string operations on ciphertexts | Planned |
+| 3b | FHE — CKKS support, comparison/string operations on ciphertexts | Complete |
 | 3c | PQC — ML-KEM-1024 key encapsulation (hybrid ECDH + ML-KEM key exchange) | Complete |
 | 4 | Encrypted streaming — chunked AES-256-GCM, file I/O, IPC (named pipes), TCP, hybrid key exchange | Complete |
 
-> **Phase 3 status:** Phase 3a is complete. The `CyTypes.Fhe` package provides a working `SealBfvEngine` for integer arithmetic (add, subtract, multiply, negate) on BFV ciphertexts, with full `SecurityPolicyBuilder` integration for `HomomorphicBasic` and `HomomorphicFull` arithmetic modes. CKKS (approximate arithmetic for floating-point types), homomorphic comparisons, and string operations are planned for Phase 3b. ML-KEM-1024 key encapsulation is fully integrated into the streaming layer (CyNetworkStream, CyPipeStream) via hybrid ECDH P-256 + ML-KEM-1024 key exchange.
+> **Phase 3 status:** Phase 3a (BFV) and Phase 3b (CKKS + comparisons + string equality) are complete. The `CyTypes.Fhe` package provides `SealBfvEngine` for exact integer arithmetic and `SealCkksEngine` for approximate floating-point arithmetic (CyFloat, CyDouble, CyDecimal) on encrypted data. `ComparisonMode.HomomorphicCircuit` enables comparisons via encrypted difference with deferred sign extraction. `StringOperationMode.HomomorphicEquality` uses AES-SIV deterministic encryption for constant-time encrypted string equality. The `HomomorphicFull` policy preset enables all FHE features. ML-KEM-1024 key encapsulation is fully integrated into the streaming layer via hybrid ECDH P-256 + ML-KEM-1024 key exchange.
 
 ## Contributing
 

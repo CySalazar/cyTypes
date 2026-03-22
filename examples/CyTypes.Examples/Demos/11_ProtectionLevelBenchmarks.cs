@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using CyTypes.Core.Crypto;
+using CyTypes.Core.Crypto.Interfaces;
 using CyTypes.Core.Policy;
 using CyTypes.Core.Policy.Components;
 using CyTypes.Fhe.Crypto;
@@ -379,7 +380,7 @@ public static class ProtectionLevelBenchmarks
         finally
         {
             // Reset global FHE engine to avoid side effects on other demos
-            FheEngineProvider.Configure(null!);
+            FheEngineProvider.Configure((IFheEngine)null!);
         }
 
         Console.WriteLine();

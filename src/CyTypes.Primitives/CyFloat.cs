@@ -1,5 +1,6 @@
 using CyTypes.Core.KeyManagement;
 using CyTypes.Core.Policy;
+using CyTypes.Core.Policy.Components;
 using CyTypes.Primitives.Shared;
 
 namespace CyTypes.Primitives;
@@ -10,12 +11,15 @@ namespace CyTypes.Primitives;
 /// </summary>
 public sealed partial class CyFloat : CyTypeBase<CyFloat, float>, ICyNumeric<CyFloat>, IComparable<CyFloat>, IEquatable<CyFloat>
 {
-    /// <summary>Indicates whether fully homomorphic encryption is supported.</summary>
-    [Obsolete("Floating-point FHE requires the CKKS scheme (Phase 3b). BFV supports integer types only. This property always returns false.")]
-    public bool SupportsFhe => false;
+    /// <summary>Indicates whether fully homomorphic encryption is supported for this instance's policy.</summary>
+    public bool SupportsFhe => Policy.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull;
 
     /// <summary>Initializes a new <see cref="CyFloat"/> by encrypting the specified value.</summary>
     public CyFloat(float value, SecurityPolicy? policy = null) : base(value, policy) { }
+
+    /// <summary>Initializes a new <see cref="CyFloat"/> from pre-existing FHE ciphertext bytes.</summary>
+    internal CyFloat(byte[] fheCiphertext, SecurityPolicy policy)
+        : base(fheCiphertext, policy, default(FheCiphertextTag)) { }
 
     /// <summary>Initializes a new <see cref="CyFloat"/> by cloning encrypted data without decryption.</summary>
     internal CyFloat(byte[] encryptedBytes, SecurityPolicy policy, KeyManager clonedKeyManager)
