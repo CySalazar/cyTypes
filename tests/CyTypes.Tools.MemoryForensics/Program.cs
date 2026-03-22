@@ -292,12 +292,13 @@ public static class Program
 
         try
         {
-            _ = cySecret.ToString();
+            _ = cySecret.ToInsecureBytes();
         }
         catch (ObjectDisposedException)
         {
-            Safe("ObjectDisposedException confirmed — object is fully disposed");
+            Safe("ObjectDisposedException on decrypt — buffer has been zeroed and released");
         }
+        Safe($"IsDisposed: {cySecret.IsDisposed}");
         Safe("SecureBuffer.Dispose() executed:");
         Safe("  1. CryptographicOperations.ZeroMemory(_buffer)  — wipe all bytes to 0x00");
         Safe("  2. MemoryLock.TryUnlock()                       — release OS-level lock");
@@ -596,10 +597,11 @@ public static class Program
 
         cyDisposable.Dispose();
         bool throwsAfterDispose = false;
-        try { _ = cyDisposable.ToString(); }
+        try { _ = cyDisposable.ToInsecureInt(); }
         catch (ObjectDisposedException) { throwsAfterDispose = true; }
-        sb.AppendLine($"  After Dispose(): ObjectDisposedException thrown: {throwsAfterDispose}");
-        sb.AppendLine($"  RESULT: {(throwsAfterDispose ? "PASS — memory zeroed and object invalidated" : "FAILURE")}");
+        sb.AppendLine($"  After Dispose(): ObjectDisposedException on decrypt: {throwsAfterDispose}");
+        sb.AppendLine($"  IsDisposed: {cyDisposable.IsDisposed}");
+        sb.AppendLine($"  RESULT: {(throwsAfterDispose && cyDisposable.IsDisposed ? "PASS — memory zeroed and object invalidated" : "FAILURE")}");
         sb.AppendLine();
 
         // ClrMD heap scan

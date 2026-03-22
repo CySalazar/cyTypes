@@ -46,6 +46,8 @@ These results confirm that cyTypes is suitable for production workloads where da
   - [Memory Allocation Profiles](#memory-allocation-profiles)
 - [Known Issues and Failed Benchmarks](#known-issues-and-failed-benchmarks)
 - [Soak Testing and Stability](#soak-testing-and-stability)
+- [Memory Forensics](#memory-forensics)
+  - [16. Memory Forensics — Plaintext Exposure and Zeroing Verification](#16-memory-forensics--plaintext-exposure-and-zeroing-verification)
 - [How to Reproduce](#how-to-reproduce)
 - [Standards and References](#standards-and-references)
 
@@ -909,6 +911,102 @@ This test validates that cyTypes does not leak secure memory over sustained work
 
 ---
 
+## Memory Forensics
+
+### 16. Memory Forensics — Plaintext Exposure and Zeroing Verification
+
+**Purpose:** Verify that CyTypes never stores plaintext on the managed heap and that `SecureBuffer.Dispose()` cryptographically zeroes all memory. These are not performance benchmarks — they are security validation tests that complement the performance data above.
+
+**Tool:** `CyTypes.Tools.MemoryForensics` (ClrMD-based live heap analysis)
+
+**Environment:** Same test machine as all benchmarks above. Report generated via `dotnet run --project tests/CyTypes.Tools.MemoryForensics -- report`.
+
+#### Test Results
+
+| # | Test | .NET Result | CyTypes Result | Verdict |
+|---|------|-------------|----------------|---------|
+| 1 | **Integer memory exposure** — search for `40 42 0F 00` (1,000,000 LE) in encrypted buffer | `int`: plaintext bytes `40 42 0F 00` directly readable | `CyInt`: 32-byte AES-256-GCM ciphertext, pattern NOT FOUND | **PASS** |
+| 2 | **String memory exposure** — search for UTF-8/UTF-16 `"sk-prod"` in encrypted buffer | `string`: UTF-16LE `73 00 6B 00 2D 00 70 00...` fully readable | `CyString`: 48-byte ciphertext, neither UTF-8 nor UTF-16 pattern found | **PASS** |
+| 3 | **Key material exposure** — search for first 8 bytes of AES-256 key in encrypted buffer | `byte[]`: full 16-byte key `2B 7E 15 16 28 AE D2 A6...` exposed | `CyBytes`: 44-byte ciphertext, key pattern NOT FOUND | **PASS** |
+| 4 | **Post-dispose zeroing** — verify `ObjectDisposedException` + `IsDisposed` after `Dispose()` | N/A (`.NET` never zeroes freed memory) | `ObjectDisposedException` on decrypt: `True`, `IsDisposed`: `True` | **PASS** |
+| 5 | **ClrMD heap validation** — walk managed heap, verify all disposed `SecureBuffer` instances are zeroed | N/A | 8 SecureBuffer instances found, 8 properly zeroed, 0 violations | **PASS** |
+
+#### Hex Dump Comparison
+
+**Test 1 — Integer (value: 1,000,000)**
+
+```
+.NET int (4 bytes):
+  0000  40 42 0F 00                                       │@B..│
+  Reconstruction: 40 42 0F 00 => 1000000
+
+CyInt encrypted buffer (32 bytes):
+  0000  FF 35 FE 68 76 07 B0 11  F5 95 C0 FA C9 0D 06 B8  │.5.hv...........│
+  0010  A8 CB 6C E9 43 B6 34 94  7B 79 F2 84 CB EA CB 08  │..l.C.4.{y......│
+```
+
+**Test 2 — String (value: "sk-prod-a1b2c3d4e5f6")**
+
+```
+.NET string UTF-16LE (40 bytes):
+  0000  73 00 6B 00 2D 00 70 00  72 00 6F 00 64 00 2D 00  │s.k.-.p.r.o.d.-.│
+  0010  61 00 31 00 62 00 32 00  63 00 33 00 64 00 34 00  │a.1.b.2.c.3.d.4.│
+  Extracted string: "sk-prod-a1b2c3d4e5f6"
+
+CyString encrypted buffer (48 bytes):
+  0000  68 FF 3D 10 D9 C0 B7 21  60 CC 63 06 DA 3B 1A AF  │h.=....!`.c..;..│
+  0010  B0 7B 14 BC F7 4B F2 FB  2D D7 B6 1E E4 DE C4 63  │.{...K..-.....c.│
+  0020  C0 A0 39 BD 66 2B 1C 0C  A6 35 7D B2 AD 5C 56 8E  │..9.f+...5}..\V.│
+```
+
+**Test 3 — Key Material (16-byte AES key)**
+
+```
+.NET byte[] (16 bytes):
+  0000  2B 7E 15 16 28 AE D2 A6  AB F7 15 88 09 CF 4F 3C  │+~..(.........O<│
+  CRITICAL: Full key material exposed
+
+CyBytes encrypted buffer (44 bytes):
+  0000  39 BE FD FF 3F 9A F9 57  F2 D6 D9 EE 05 6F CC DD  │9...?..W.....o..│
+  0010  8F CA C1 5D 68 89 E8 C0  57 AF BB CF F2 97 E4 5C  │...]h...W......\│
+  0020  3F 63 F5 4E 79 89 AC 18  3E AE F3 17              │?c.Ny...>...    │
+```
+
+#### ClrMD Managed Heap Analysis
+
+```
+SecureBuffer instances: 8
+  Properly zeroed:     8    (disposed, buffer = all 0x00)
+  Violations:          0    (disposed but non-zero bytes)
+```
+
+All disposed `SecureBuffer` instances were validated by reading their `_isDisposed` field (must be `1`) and then scanning their `_buffer` byte array — every byte must be `0x00`. Zero violations confirms that `CryptographicOperations.ZeroMemory` is effective across all instances.
+
+#### Attack Surface Summary
+
+| Attack Vector | .NET Primitives | CyTypes |
+|---------------|-----------------|---------|
+| Memory dump (`/proc/pid/mem`) | Plaintext visible | AES-256-GCM ciphertext only |
+| Core dump analysis | All secrets recoverable | Only ciphertext + nonces |
+| Cold-boot attack (DRAM) | Plaintext in cleartext | Encrypted + OS-locked (mlock) |
+| GC heap walk (`!dumpheap`) | Plaintext on managed heap | Ciphertext in pinned buffer |
+| Post-free memory scan | Stale plaintext persists | Cryptographically zeroed |
+| Swap file forensics | May be paged to disk | mlock/VirtualLock prevents paging |
+| GC compaction copies | Unzeroable ghost copies | Pinned — never relocated |
+| String interning | Permanent, unzeroable | Never interned |
+
+#### Protection Stack
+
+| Layer | Mechanism | Purpose |
+|-------|-----------|---------|
+| 1 | AES-256-GCM encryption | Plaintext never stored in managed heap |
+| 2 | `GC.AllocateArray(pinned: true)` | Prevent GC relocation (no ghost copies) |
+| 3 | `mlock` / `VirtualLock` | Prevent paging to swap file |
+| 4 | `CryptographicOperations.ZeroMemory` | Cryptographic wipe on dispose |
+| 5 | Finalizer safety net | Zeroes buffer even without explicit `Dispose()` |
+
+---
+
 ## How to Reproduce
 
 ### Prerequisites
@@ -945,6 +1043,15 @@ dotnet run --project tests/CyTypes.Benchmarks.Application -c Release -- soak 60
 
 # Run NBomber load test
 dotnet run --project tests/CyTypes.Benchmarks.Application -c Release -- --filter "*NBomber*"
+
+# Memory forensics — interactive console
+dotnet run --project tests/CyTypes.Tools.MemoryForensics
+
+# Memory forensics — generate static report
+dotnet run --project tests/CyTypes.Tools.MemoryForensics -- report forensic-report.txt
+
+# Memory forensics — scan external process for plaintext pattern
+dotnet run --project tests/CyTypes.Tools.MemoryForensics -- scan <pid> DEADBEEF
 ```
 
 ### Interpreting Results

@@ -188,16 +188,16 @@ public static class MemoryForensics
         cySecret.Dispose();
         ConsoleHelpers.PrintCode("cySecret.Dispose(); // CryptographicOperations.ZeroMemory()");
 
-        // After dispose, we can verify via ToString() that the object is disposed
+        // After dispose, decryption throws — proving the buffer is gone
         try
         {
-            _ = cySecret.ToString();
-            ConsoleHelpers.PrintInfo("Object reports disposed state via ToString()");
+            _ = cySecret.ToInsecureBytes();
         }
         catch (ObjectDisposedException)
         {
-            ConsoleHelpers.PrintSecure("ObjectDisposedException — buffer has been zeroed and released");
+            ConsoleHelpers.PrintSecure("ObjectDisposedException on decrypt — buffer zeroed and released");
         }
+        ConsoleHelpers.PrintSecure($"IsDisposed: {cySecret.IsDisposed}");
 
         ConsoleHelpers.PrintSecure("SecureBuffer.Dispose() calls CryptographicOperations.ZeroMemory()");
         ConsoleHelpers.PrintSecure("Memory is cryptographically wiped — no residual ciphertext");
