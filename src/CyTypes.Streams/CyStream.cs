@@ -32,7 +32,7 @@ public class CyStream : Stream, IAsyncDisposable
     // Footer tracking (for write integrity)
     private readonly List<byte> _gcmTags = [];
     private byte[]? _headerBytes;
-    private byte[]? _streamKey;
+    private SecureBuffer? _streamKey;
 
     private bool _isDisposed;
     private bool _isFlushedFinal;
@@ -105,7 +105,8 @@ public class CyStream : Stream, IAsyncDisposable
         _leaveOpen = leaveOpen;
 
         // Store key for HMAC
-        _streamKey = key.ToArray();
+        _streamKey = new SecureBuffer(key.Length);
+        _streamKey.Write(key);
 
         if (isWriteMode)
         {
@@ -228,7 +229,7 @@ public class CyStream : Stream, IAsyncDisposable
         FlushChunk(isFinal: true);
 
         // Write footer with HMAC
-        var hmacKey = StreamSerializationFormat.DeriveHmacKey(_streamKey);
+        var hmacKey = StreamSerializationFormat.DeriveHmacKey(_streamKey!.AsReadOnlySpan());
         try
         {
             // Authenticated data = header + all GCM tags
@@ -343,11 +344,12 @@ public class CyStream : Stream, IAsyncDisposable
             _readBuffer?.Dispose();
             _engine.Dispose();
 
-            if (_streamKey != null)
-            {
-                CryptographicOperations.ZeroMemory(_streamKey);
-                _streamKey = null;
-            }
+            _streamKey?.Dispose();
+            _streamKey = null;
+
+            // Zero GCM tags (crypto material)
+            for (var i = 0; i < _gcmTags.Count; i++) _gcmTags[i] = 0;
+            _gcmTags.Clear();
 
             if (!_leaveOpen)
                 _innerStream.Dispose();
@@ -374,11 +376,12 @@ public class CyStream : Stream, IAsyncDisposable
         _readBuffer?.Dispose();
         _engine.Dispose();
 
-        if (_streamKey != null)
-        {
-            CryptographicOperations.ZeroMemory(_streamKey);
-            _streamKey = null;
-        }
+        _streamKey?.Dispose();
+        _streamKey = null;
+
+        // Zero GCM tags (crypto material)
+        for (var i = 0; i < _gcmTags.Count; i++) _gcmTags[i] = 0;
+        _gcmTags.Clear();
 
         if (!_leaveOpen)
             await _innerStream.DisposeAsync().ConfigureAwait(false);
