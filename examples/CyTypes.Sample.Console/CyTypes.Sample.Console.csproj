@@ -10,12 +10,9 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- Single meta-package reference replaces individual project references -->
   <ItemGroup>
-    <ProjectReference Include="..\..\src\CyTypes.Core\CyTypes.Core.csproj" />
-    <ProjectReference Include="..\..\src\CyTypes.Primitives\CyTypes.Primitives.csproj" />
-    <ProjectReference Include="..\..\src\CyTypes.Collections\CyTypes.Collections.csproj" />
-    <ProjectReference Include="..\..\src\CyTypes.Fhe\CyTypes.Fhe.csproj" />
-    <ProjectReference Include="..\..\src\CyTypes.Streams\CyTypes.Streams.csproj" />
+    <ProjectReference Include="..\..\src\CyTypes\CyTypes.csproj" />
   </ItemGroup>
 
 </Project>
