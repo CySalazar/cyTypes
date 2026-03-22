@@ -158,5 +158,6 @@ See [analyzer-guide.md](analyzer-guide.md).
 | [streaming-guide.md](streaming-guide.md)     | Encrypted file/IPC/TCP streams     |
 | [ef-core-guide.md](ef-core-guide.md)         | Entity Framework Core integration  |
 | [analyzer-guide.md](analyzer-guide.md)       | Roslyn analyzer diagnostics        |
+| [di-fhe-guide.md](di-fhe-guide.md)           | DI + FHE integration               |
 | [migration-guide.md](migration-guide.md)     | Migrating from standard .NET types |
 | [security-model.md](security-model.md)       | Security model and guarantees      |

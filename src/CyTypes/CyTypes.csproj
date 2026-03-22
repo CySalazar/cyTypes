@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Always-encrypted .NET primitive types — single package with all components. Includes Core, Primitives, Collections, FHE (Microsoft SEAL), Streams, EF Core, DI, Logging, and Analyzer.</Description>
+    <PackageTags>encryption;security;cryptography;fhe;post-quantum;aes-gcm;pqc;ml-kem;efcore;aspnetcore</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <!-- Meta-package: no source code, only references to all component packages -->
+  <ItemGroup>
+    <ProjectReference Include="..\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+    <ProjectReference Include="..\CyTypes.Collections\CyTypes.Collections.csproj" />
+    <ProjectReference Include="..\CyTypes.Fhe\CyTypes.Fhe.csproj" />
+    <ProjectReference Include="..\CyTypes.Streams\CyTypes.Streams.csproj" />
+    <ProjectReference Include="..\CyTypes.EntityFramework\CyTypes.EntityFramework.csproj" />
+    <ProjectReference Include="..\CyTypes.DependencyInjection\CyTypes.DependencyInjection.csproj" />
+    <ProjectReference Include="..\CyTypes.Logging\CyTypes.Logging.csproj" />
+    <ProjectReference Include="..\CyTypes.Analyzer\CyTypes.Analyzer.csproj" />
+  </ItemGroup>
+
+</Project>
