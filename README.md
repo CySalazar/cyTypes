@@ -4,6 +4,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 9.0](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/)
+[![Build](https://github.com/cySalazar/cyTypes/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/cySalazar/cyTypes/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/cySalazar/cyTypes/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/cySalazar/cyTypes/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/cySalazar/cyTypes/badge)](https://securityscorecards.dev/viewer/?uri=github.com/cySalazar/cyTypes)
+[![NuGet](https://img.shields.io/nuget/v/CyTypes.svg)](https://www.nuget.org/packages/CyTypes)
 
 > Copyright 2026 Matteo Sala (cysalazar@cysalazar.com)
 
