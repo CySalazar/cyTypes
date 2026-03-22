@@ -10,8 +10,8 @@ The `CyTypes.Streams` package provides AES-256-GCM chunked stream encryption for
 |-------------------|-------------------|-------------------------------|
 | `CyStream`        | Any `Stream`      | Manual (caller provides key)  |
 | `CyFileStream`    | `FileStream`      | Manual or passphrase-derived  |
-| `CyPipeStream`    | Named pipes (IPC) | Hybrid X25519 + ML-KEM-1024  |
-| `CyNetworkStream` | TCP sockets       | Hybrid X25519 + ML-KEM-1024  |
+| `CyPipeStream`    | Named pipes (IPC) | Hybrid ECDH P-256 + ML-KEM-1024  |
+| `CyNetworkStream` | TCP sockets       | Hybrid ECDH P-256 + ML-KEM-1024  |
 
 ## CyStream (Base)
 
@@ -70,7 +70,7 @@ Atomic writes ensure that a crash during write does not corrupt the original fil
 ## IPC Streams (Named Pipes)
 
 `CyPipeServer` and `CyPipeClient` provide encrypted inter-process communication.
-Session keys are negotiated via hybrid key exchange (X25519 + ML-KEM-1024).
+Session keys are negotiated via hybrid key exchange (ECDH P-256 + ML-KEM-1024).
 
 ```csharp
 using CyTypes.Streams.Ipc;
@@ -120,10 +120,10 @@ var response = await stream.ReceiveAsync();
 
 IPC and network streams use `SessionKeyNegotiator` for hybrid post-quantum key exchange:
 
-1. Both sides generate ephemeral X25519 and ML-KEM-1024 key pairs
+1. Both sides generate ephemeral ECDH P-256 and ML-KEM-1024 key pairs
 2. Public keys are exchanged in `HandshakeMessage` frames
 3. The initiator encapsulates the ML-KEM shared secret
-4. Both sides derive: `HKDF-SHA512(x25519_shared || mlkem_shared, salt=transcript_hash, info="CyTypes.SessionKey")`
+4. Both sides derive: `HKDF-SHA512(ecdh_shared || mlkem_shared, salt=transcript_hash, info="CyTypes.SessionKey")`
 
 The transcript hash uses canonical (sorted) key ordering so both sides produce identical session keys.
 
