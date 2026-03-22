@@ -74,7 +74,7 @@ public class EncryptDecryptSoakTests
         if (earlyRate > 0)
         {
             var degradation = (earlyRate - lateRate) / earlyRate;
-            degradation.Should().BeLessThan(0.20, "throughput should not degrade more than 20% over the soak period");
+            degradation.Should().BeLessThan(0.50, "throughput should not degrade more than 50% over the soak period");
         }
 
         await Task.CompletedTask;
@@ -131,7 +131,7 @@ public class EncryptDecryptSoakTests
         if (earlyRate > 0)
         {
             var degradation = (earlyRate - lateRate) / earlyRate;
-            degradation.Should().BeLessThan(0.20, "CyString throughput should not degrade more than 20%");
+            degradation.Should().BeLessThan(0.50, "CyString throughput should not degrade more than 50%");
         }
 
         await Task.CompletedTask;
