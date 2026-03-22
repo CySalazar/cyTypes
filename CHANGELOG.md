@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-03-22
+
 ### Added
+- `CyTypes` meta-package — single NuGet install for all components
+- 7 new interactive demos: FHE BFV, PQC ML-KEM, Collections, DI+Logging, Overflow+KeyTTL, JSON Serialization
+- 2 sample projects: `CyTypes.Sample.WebApi` (DI + EF Core + Logging) and `CyTypes.Sample.Console` (end-to-end walkthrough)
+- Documentation: `pqc-guide.md`, `collections-guide.md`, `analyzer-guide.md`, `di-fhe-guide.md`
+- Updated `fhe-guide.md` with CKKS, homomorphic comparisons, and AES-SIV string equality
+- Updated `getting-started.md` with Phase 3+ features overview and guide index
+- 41 new tests: Streams (32→55), EF Core (34→43), Analyzer (10→19)
+- EF Core persistence tests for all 10 CyType primitives (was 5)
 - `IEquatable<T>` on all 10 primitive types with `Equals(T?)`, `Equals(object?)`, and `GetHashCode()` consistency
 - `IComparable<T>` on `CyBool`, `CyString` (ordinal), `CyBytes` (lexicographic), and `CyGuid`
 - Comparison operators (`<`, `>`, `<=`, `>=`) on `CyBool`, `CyString`, `CyBytes`, and `CyGuid`
@@ -35,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NuGet publish workflow on `v*` tags
 - Code coverage reporting in CI with 80% threshold
 - Encrypted collections: `CyList<T>` and `CyDictionary<TKey, TValue>`
-- Roslyn analyzer with diagnostics CY0001-CY0004
+- Roslyn analyzer with diagnostics CY0001-CY0005
 - Implicit widening conversions between numeric CyTypes
 - `CHANGELOG.md` and `.gitattributes`
 
@@ -51,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SecurityPolicyBuilder` defaults updated to `SecureEnclave` / `HmacBased` (previously `HomomorphicBasic`)
 - `BinarySerializer.MaxVariableLengthBytes` is now `public` (was `internal`)
 - `PlatformKeyStoreFactory.Create()` now accepts `minimumCapability` parameter
+
+### Fixed
+- CKKS floating-point demo (15) was not registered in the interactive examples menu
 
 ## [1.0.0] - 2026-03-19
 
