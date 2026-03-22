@@ -37,6 +37,13 @@ Three levels are available via the `MemoryProtection` enum:
 
 All `SecureBuffer` instances zero their contents on disposal via `CryptographicOperations.ZeroMemory`. Plaintext byte arrays created during encrypt/decrypt are zeroed in `finally` blocks.
 
+### Verification
+
+Memory protection can be verified in practice using the included forensic tools:
+
+- **Demo 22** (`dotnet run --project examples/CyTypes.Examples -- 22`) — in-process hex dump comparison showing .NET plaintext vs CyTypes ciphertext, post-dispose zeroing proof, and GC relocation attack surface
+- **CyTypes.Tools.MemoryForensics** (`dotnet run --project tests/CyTypes.Tools.MemoryForensics`) — full forensic tool with ClrMD-based managed heap analysis, pattern search across `byte[]` objects, and `SecureBuffer` disposal validation
+
 ## Taint Tracking and Compromise Detection
 
 Each instance tracks two independent flags via `SecurityContext`:

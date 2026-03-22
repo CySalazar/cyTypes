@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-03-22
+
+### Added
+- Demo 22: Memory Forensics — live in-process hex dump comparison between .NET primitives and CyTypes, with post-dispose zeroing verification and GC relocation proof
+- `CyTypes.Tools.MemoryForensics` — standalone forensic console tool with three modes:
+  - `interactive` — menu-driven forensic scenarios (integer, string, key material, post-dispose, GC relocation, ClrMD heap scan)
+  - `report [path]` — generates static forensic report with automated test results
+  - `scan <pid> <hex>` — scans external process managed heap for plaintext byte patterns + SecureBuffer validation
+- ClrMD-based live heap analysis: pattern search in `byte[]` objects, `SecureBuffer` disposal verification, heap statistics
+- Memory forensics documentation in README (Memory Protection section)
+
+### Changed
+- Examples menu now includes 22 interactive demo scenarios (was 21)
+- Project structure updated: `CyTypes.Tools.MemoryForensics` added under tests/
+
+## [2.3.0] - 2026-03-22
+
+### Changed
+- Version bump to 2.3.0 — aligned sample projects to use CyTypes meta-package
+
+## [2.2.5] - 2026-03-22
+
+### Fixed
+- Clarified that HomomorphicEquality mode uses AES-SIV deterministic encryption, not FHE
+
+## [2.2.4] - 2026-03-22
+
+### Fixed
+- Softened absolute "never plaintext" claims in README and security-model (plaintext exists transiently during operations)
+
+## [2.2.3] - 2026-03-22
+
+### Fixed
+- Corrected X25519 → ECDH P-256 reference in streaming-guide.md
+
+## [2.2.2] - 2026-03-22
+
+### Fixed
+- Corrected 3 stale FHE claims in README
+
 ## [2.2.1] - 2026-03-22
 
 ### Fixed

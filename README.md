@@ -151,7 +151,7 @@ dotnet run --project examples/CyTypes.Sample.Console
 # ASP.NET Core WebAPI — DI, EF Core, encrypted entities
 dotnet run --project examples/CyTypes.Sample.WebApi
 
-# Interactive demo menu — 21 scenarios from basics to FHE
+# Interactive demo menu — 22 scenarios from basics to FHE + memory forensics
 dotnet run --project examples/CyTypes.Examples
 ```
 
@@ -966,6 +966,34 @@ All encrypted data is stored in `SecureBuffer` instances that provide:
 - **Zeroing on dispose**: `CryptographicOperations.ZeroMemory` — no residual plaintext
 - **Thread-safe dispose**: Atomic `Interlocked.CompareExchange` ensures dispose is safe under concurrent access
 
+### Memory Forensics Tools
+
+Two tools verify memory protection in practice:
+
+```bash
+# Demo 22 — in-process forensic comparison (lightweight, no ClrMD)
+dotnet run --project examples/CyTypes.Examples -- 22
+
+# Full forensic tool — interactive console with ClrMD heap analysis
+dotnet run --project tests/CyTypes.Tools.MemoryForensics
+
+# Generate static forensic report
+dotnet run --project tests/CyTypes.Tools.MemoryForensics -- report forensic-report.txt
+
+# Scan external process for plaintext patterns
+dotnet run --project tests/CyTypes.Tools.MemoryForensics -- scan <pid> DEADBEEF
+```
+
+The forensic tools demonstrate:
+
+| Verification | What it proves |
+|-------------|----------------|
+| Hex dump comparison | .NET stores plaintext; CyTypes stores only AES-256-GCM ciphertext |
+| Pattern search | Plaintext byte patterns are never found in CyType encrypted buffers |
+| Post-dispose scan | `SecureBuffer.Dispose()` zeroes all memory via `CryptographicOperations.ZeroMemory` |
+| GC relocation proof | .NET strings relocate during compaction (ghost copies); CyTypes buffers are pinned |
+| ClrMD heap walk | Live managed heap validation: all disposed `SecureBuffer` instances are zeroed |
+
 ---
 
 ## Roslyn Analyzer (CY0001-CY0004)
@@ -1141,12 +1169,13 @@ tests/
 ├── CyTypes.Streams.Tests
 ├── CyTypes.Benchmarks                # Core micro-benchmarks (BenchmarkDotNet)
 ├── CyTypes.Benchmarks.Application    # Application-level benchmarks (API, EF Core, JSON)
-└── CyTypes.Tools.HeapAnalysis        # Memory analysis tool
+├── CyTypes.Tools.HeapAnalysis        # Memory analysis tool (external process)
+└── CyTypes.Tools.MemoryForensics     # Full forensic tool (interactive + report)
 
 examples/
 ├── CyTypes.Sample.Console            # End-to-end console walkthrough
 ├── CyTypes.Sample.WebApi             # ASP.NET Core minimal API with EF Core
-└── CyTypes.Examples                  # 21 interactive demo scenarios
+└── CyTypes.Examples                  # 22 interactive demo scenarios
 
 docs/
 ├── hello-world.md                    # 5-minute minimal introduction

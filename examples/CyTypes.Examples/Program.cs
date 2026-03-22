@@ -27,6 +27,7 @@ public static class Program
         ("Dependency Injection + Redacting Logger", DependencyInjectionDemo.Run),
         ("Overflow Mode + Key TTL / Expiration", OverflowAndKeyTtl.Run),
         ("Secure Serialization — JSON + HMAC Integrity", SecureSerialization.Run),
+        ("Memory Forensics — Live Heap Dump Comparison", MemoryForensics.Run),
     ];
 
     public static void Main(string[] args)
