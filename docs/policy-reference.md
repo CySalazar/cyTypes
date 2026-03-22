@@ -81,7 +81,7 @@ Enables FHE arithmetic (add, subtract, multiply) on integer types via Microsoft 
 - `SecureEnclave` -- decrypt, compute, re-encrypt in-process
 
 ### ComparisonMode
-- `HomomorphicCircuit` -- compare without decryption (Phase 3b, not yet available)
+- `HomomorphicCircuit` -- encrypted difference with deferred sign extraction (subtraction is homomorphic; verdict requires decryption)
 - `HmacBased` -- constant-time HMAC tag comparison
 - `SecureEnclave` -- decrypt and compare in-process
 

@@ -98,7 +98,9 @@ double result = sum.ToInsecureDouble(); // ~5.85987
 
 ## Homomorphic Comparisons
 
-`ComparisonMode.HomomorphicCircuit` enables encrypted comparisons on integers via encrypted difference with deferred sign extraction.
+`ComparisonMode.HomomorphicCircuit` enables comparisons via encrypted difference with deferred sign extraction.
+
+> **Important:** This is **not** a purely homomorphic comparison end-to-end. The subtraction (`ComputeDifference`) operates on ciphertexts without decryption, but extracting the boolean verdict (`DecryptComparison` / `DecryptEquality`) **requires decryption** of the difference to read the sign. The secret key holder must be involved in producing the final `true`/`false` result — an untrusted party with only the public key cannot evaluate a comparison to completion.
 
 ### Setup
 
@@ -133,9 +135,18 @@ var policy = new SecurityPolicyBuilder()
 using var x = new CyInt(42, policy);
 using var y = new CyInt(17, policy);
 
-bool greater = x > y;  // True -- computed on encrypted data
+// Subtraction is homomorphic; the final bool requires decryption of the difference
+bool greater = x > y;  // True
 bool equal = x == y;    // False
 ```
+
+### How It Works Internally
+
+1. **`ComputeDifference(a, b)`** — homomorphic subtraction on ciphertexts (no decryption)
+2. **`DecryptComparison(diff)`** — decrypts the difference, returns sign: `+1` (a > b), `-1` (a < b), or `0` (equal)
+3. **`DecryptEquality(diff, epsilon)`** — decrypts and checks if |diff| ≤ epsilon (for CKKS approximate equality)
+
+The operator overloads (`>`, `<`, `==`) on CyType primitives call both steps transparently, so the decryption is implicit but **does occur**.
 
 ## Encrypted String Equality
 
