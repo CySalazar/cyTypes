@@ -26,7 +26,7 @@ dotnet add package CyTypes.Logging
 ## Basic Usage
 
 Every CyType encrypts its value in memory on construction using AES-256-GCM.
-The plaintext is never stored -- only encrypted bytes in pinned secure buffers.
+Plaintext exists only transiently during operations and is zeroed promptly -- at rest, only encrypted bytes live in pinned secure buffers.
 
 ```csharp
 using CyTypes.Primitives;

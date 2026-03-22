@@ -5,6 +5,12 @@
 The `CyTypes.EntityFramework` package provides EF Core value converters for all CyType primitives.
 Values are decrypted when persisted to the database and re-encrypted when materialized from query results.
 
+> [!WARNING]
+> **CyTypes EF Core converters decrypt values before storing them in the database.**
+> The database receives and stores plaintext. CyTypes encryption protects data
+> only in application memory. If you need database-level encryption, combine
+> CyTypes with Always Encrypted or Transparent Data Encryption (TDE).
+
 ## Installation
 
 ```bash
