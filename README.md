@@ -125,6 +125,36 @@ Console.WriteLine(plaintext); // 1250
 Console.WriteLine(newBalance.IsCompromised); // True
 ```
 
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| **[Hello World](docs/hello-world.md)** | **Start here** — 5-minute minimal introduction |
+| [Getting Started](docs/getting-started.md) | Full feature overview: policies, all 10 types, collections |
+| [Migration Guide](docs/migration-guide.md) | Replace `int`/`string` with `CyInt`/`CyString` in existing code |
+| [Security Model](docs/security-model.md) | Threat model, guarantees, and known limitations |
+| [Policy Reference](docs/policy-reference.md) | SecurityPolicy and builder API |
+| [FHE Guide](docs/fhe-guide.md) | Fully Homomorphic Encryption (BFV + CKKS) |
+| [PQC Guide](docs/pqc-guide.md) | Post-quantum hybrid key exchange (ECDH P-256 + ML-KEM-1024) |
+| [Streaming Guide](docs/streaming-guide.md) | Encrypted file, IPC, and TCP streams |
+| [Collections Guide](docs/collections-guide.md) | CyList, CyDictionary |
+| [EF Core Guide](docs/ef-core-guide.md) | Entity Framework Core integration |
+| [DI + FHE Guide](docs/di-fhe-guide.md) | Dependency injection with FHE engines |
+| [Analyzer Guide](docs/analyzer-guide.md) | Roslyn analyzer diagnostics (CY0001–CY0004) |
+
+## Sample Projects
+
+```bash
+# Console walkthrough — covers all features end-to-end
+dotnet run --project examples/CyTypes.Sample.Console
+
+# ASP.NET Core WebAPI — DI, EF Core, encrypted entities
+dotnet run --project examples/CyTypes.Sample.WebApi
+
+# Interactive demo menu — 21 scenarios from basics to FHE
+dotnet run --project examples/CyTypes.Examples
+```
+
 ---
 
 ## .NET Native vs cyTypes — Side-by-Side Comparison
@@ -1114,9 +1144,14 @@ tests/
 └── CyTypes.Tools.HeapAnalysis        # Memory analysis tool
 
 examples/
-└── CyTypes.Examples                  # 11 demo scenarios
+├── CyTypes.Sample.Console            # End-to-end console walkthrough
+├── CyTypes.Sample.WebApi             # ASP.NET Core minimal API with EF Core
+└── CyTypes.Examples                  # 21 interactive demo scenarios
 
 docs/
+├── hello-world.md                    # 5-minute minimal introduction
+├── getting-started.md                # Full feature overview
+├── (10 topic guides)                 # FHE, PQC, streaming, EF Core, etc.
 └── compliance/                       # FIPS, NIST, SOC2/PCI/GDPR documentation
 
 nupkgs/                               # Built NuGet packages

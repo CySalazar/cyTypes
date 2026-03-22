@@ -1,5 +1,7 @@
 # Getting Started with CyTypes
 
+> **New to CyTypes?** Start with the [Hello World](hello-world.md) guide for a minimal 5-minute introduction. This page covers the full feature set.
+
 ## Installation
 
 Install the NuGet packages for the components you need:
