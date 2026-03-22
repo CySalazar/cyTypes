@@ -27,11 +27,6 @@ list.Add(new CyInt(30));
 
 Console.WriteLine(list.Count);     // 3
 Console.WriteLine(list[0]);        // [CyInt:Encrypted|...]
-
-foreach (var item in list)
-{
-    Console.WriteLine(item.ToInsecureInt());
-}
 ```
 
 ### AddRange
@@ -40,10 +35,26 @@ foreach (var item in list)
 list.AddRange(new[] { new CyInt(40), new CyInt(50) });
 ```
 
-### RemoveAll -- Dispose Matching Elements
+### Encrypted Aggregation
+
+Work on encrypted values as long as possible — decrypt only at the end:
 
 ```csharp
-int removed = list.RemoveAll(x => x.ToInsecureInt() > 25);
+// Sum all elements without exposing individual values
+using var total = list.Aggregate((acc, x) => acc + x);
+
+// Decrypt only the final result
+Console.WriteLine(total.ToInsecureInt()); // 60
+```
+
+### RemoveAll -- Dispose Matching Elements
+
+Use CyInt comparison operators — the predicate compares encrypted values
+via the policy's `ComparisonMode`, without exposing plaintext to your code:
+
+```csharp
+using var threshold = new CyInt(25);
+int removed = list.RemoveAll(x => x > threshold);
 // Removed elements are automatically disposed (memory zeroed)
 ```
 
@@ -58,16 +69,22 @@ item.Dispose(); // your responsibility
 
 ### Sort and FindAll
 
-```csharp
-list.Sort((a, b) => a.ToInsecureInt().CompareTo(b.ToInsecureInt()));
+CyInt implements `IComparable<CyInt>` — sort and filter without calling `ToInsecure*()`:
 
-using var filtered = list.FindAll(x => x.ToInsecureInt() > 10);
+```csharp
+// Sort using CyInt's built-in encrypted comparison
+list.Sort((a, b) => a.CompareTo(b));
+
+// Filter using encrypted comparison operators
+using var minValue = new CyInt(10);
+using var filtered = list.FindAll(x => x > minValue);
 // filtered is a new CyList with shared references (not cloned)
 ```
 
 ### ForEach
 
 ```csharp
+// Printing requires decryption — this is the appropriate place to decrypt
 list.ForEach(item => Console.Write($"{item.ToInsecureInt()} "));
 ```
 
@@ -103,6 +120,28 @@ dict["email"] = new CyString("bob@example.com");
 ```csharp
 var detached = dict.Detach("email");
 // detached is NOT disposed -- you own it now
+```
+
+## Minimizing Decryption — Best Practices
+
+The examples above demonstrate two principles:
+
+1. **Aggregate, sort, and filter on encrypted values** using operators (`+`, `>`, `CompareTo`) — these work through the policy's comparison and arithmetic modes without exposing plaintext to your code.
+2. **Decrypt only at system boundaries** — when you need to display, serialize, or return a value to an external consumer.
+
+Pattern to avoid:
+
+```csharp
+// Bad — decrypts every element just to find the max
+var max = list.OrderByDescending(x => x.ToInsecureInt()).First();
+```
+
+Preferred:
+
+```csharp
+// Good — uses encrypted comparison, decrypts only the final result
+list.Sort((a, b) => b.CompareTo(a));
+Console.WriteLine(list[0].ToInsecureInt());
 ```
 
 ## ToCyList LINQ Extension
