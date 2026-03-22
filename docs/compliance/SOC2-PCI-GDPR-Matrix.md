@@ -1,5 +1,7 @@
 # Compliance Matrix — cyTypes
 
+> **Disclaimer**: This is a self-assessment mapping of cyTypes capabilities to compliance framework requirements, not a formal certification or audit report. Achieving SOC 2, PCI DSS, or GDPR compliance requires independent assessment of your complete system — not just the cryptographic library.
+
 ## SOC 2 Type II
 
 | Control | Requirement | cyTypes Implementation |

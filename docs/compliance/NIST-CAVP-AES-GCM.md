@@ -1,5 +1,7 @@
 # NIST CAVP AES-GCM Mapping — cyTypes
 
+> **Disclaimer**: This is a self-assessment mapping of test coverage to NIST CAVP categories, not a formal CAVP validation certificate. Formal validation requires submission to an accredited laboratory.
+
 ## Algorithm Implementation
 - **Algorithm**: AES-256-GCM (AEAD)
 - **Key Size**: 256 bits

@@ -1,5 +1,7 @@
 # NIST CAVP HKDF Mapping — cyTypes
 
+> **Disclaimer**: This is a self-assessment mapping of test coverage to NIST CAVP categories, not a formal CAVP validation certificate. Formal validation requires submission to an accredited laboratory.
+
 ## Algorithm Implementation
 - **Algorithm**: HKDF-SHA512 (RFC 5869)
 - **Hash Function**: SHA-512
