@@ -180,7 +180,7 @@ public sealed class CyList<T> : IList<T>, IReadOnlyList<T>, IDisposable where T 
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
         foreach (var item in _items)
-            item.Dispose();
+            item?.Dispose();
         _items.Clear();
     }
 
@@ -199,7 +199,7 @@ public sealed class CyList<T> : IList<T>, IReadOnlyList<T>, IDisposable where T 
         if (_isDisposed) return;
         _isDisposed = true;
         foreach (var item in _items)
-            item.Dispose();
+            item?.Dispose();
         _items.Clear();
     }
 }
