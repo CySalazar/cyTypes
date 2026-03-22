@@ -61,7 +61,7 @@
 cyTypes replaces standard .NET primitives (`int`, `string`, `bool`, etc.) with encrypted counterparts (`CyInt`, `CyString`, `CyBool`, etc.) that keep data encrypted in memory at all times using AES-256-GCM in pinned, locked buffers.
 
 **Key features:**
-- **Always-encrypted**: Values never exist as plaintext in managed memory
+- **Always-encrypted**: Values are encrypted at rest in memory; plaintext exists only transiently during operations and is zeroed promptly
 - **Taint tracking**: Automatic propagation of compromise/taint state through operations
 - **Security policies**: Configurable security levels (Maximum, Balanced, Performance, HomomorphicBasic)
 - **Memory protection**: Pinned buffers + OS-level memory locking (mlock/VirtualLock) + zeroing on dispose

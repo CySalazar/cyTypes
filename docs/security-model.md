@@ -4,7 +4,7 @@
 
 CyTypes protects against:
 
-- **Memory inspection** -- values are AES-256-GCM encrypted in pinned buffers; plaintext never resides in managed heap memory
+- **Memory inspection** -- values are AES-256-GCM encrypted in pinned buffers; plaintext exists only transiently during operations and is zeroed promptly (see Known Limitations for GC caveats)
 - **Cold boot / swap attacks** -- `PinnedLocked` and `PinnedLockedReEncrypting` memory protection prevents paging to disk via `mlock`
 - **Accidental logging** -- `ToString()` always returns a redacted representation; `FormattingMode.Redacted` is the default
 - **Over-decryption** -- configurable `MaxDecryptionCount` and `DecryptionRateLimit` limit how often plaintext is extracted
