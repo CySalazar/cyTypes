@@ -559,22 +559,13 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>Releases managed and unmanaged resources.</summary>
+    /// <summary>Releases managed resources. SecureBuffer handles its own finalization independently.</summary>
     protected virtual void Dispose(bool disposing)
     {
         if (_isDisposed) return;
         _isDisposed = true;
 
-        if (disposing)
-        {
-            _encryptedData?.Dispose();
-            _keyManager.Dispose();
-        }
-    }
-
-    /// <summary>Finalizer: ensures resources are released if Dispose was not called.</summary>
-    ~CyTypeBase()
-    {
-        Dispose(false);
+        _encryptedData?.Dispose();
+        _keyManager.Dispose();
     }
 }

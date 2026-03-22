@@ -1,11 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Attributes;
+using CyTypes.Core.Policy;
 using CyTypes.Primitives;
 using Microsoft.EntityFrameworkCore;
 
 namespace CyTypes.Benchmarks.Application.EfCore;
 
 [MemoryDiagnoser]
-public class EfCoreBenchmarks : IDisposable
+[SuppressMessage("Reliability", "CA1001:Types that own disposable fields should be disposable")]
+public class EfCoreBenchmarks
 {
     private BenchmarkDbContext _context = null!;
 
@@ -22,13 +25,10 @@ public class EfCoreBenchmarks : IDisposable
     }
 
     [GlobalCleanup]
-    public void Cleanup() => Dispose();
-
-    public void Dispose()
+    public void Cleanup()
     {
         _context?.Database.CloseConnection();
         _context?.Dispose();
-        GC.SuppressFinalize(this);
     }
 
     [IterationSetup]
@@ -43,10 +43,10 @@ public class EfCoreBenchmarks : IDisposable
     {
         _context.EncryptedOrders.Add(new EncryptedOrder
         {
-            Name = new CyString("Test Order"),
-            Quantity = new CyInt(10),
-            Price = new CyDecimal(29.99m),
-            OrderDate = new CyDateTime(DateTime.UtcNow)
+            Name = new CyString("Test Order", SecurityPolicy.Performance),
+            Quantity = new CyInt(10, SecurityPolicy.Performance),
+            Price = new CyDecimal(29.99m, SecurityPolicy.Performance),
+            OrderDate = new CyDateTime(DateTime.UtcNow, SecurityPolicy.Performance)
         });
         _context.SaveChanges();
     }
@@ -71,10 +71,10 @@ public class EfCoreBenchmarks : IDisposable
         {
             _context.EncryptedOrders.Add(new EncryptedOrder
             {
-                Name = new CyString($"Order {i}"),
-                Quantity = new CyInt(i),
-                Price = new CyDecimal(i * 10.5m),
-                OrderDate = new CyDateTime(DateTime.UtcNow)
+                Name = new CyString($"Order {i}", SecurityPolicy.Performance),
+                Quantity = new CyInt(i, SecurityPolicy.Performance),
+                Price = new CyDecimal(i * 10.5m, SecurityPolicy.Performance),
+                OrderDate = new CyDateTime(DateTime.UtcNow, SecurityPolicy.Performance)
             });
         }
         _context.SaveChanges();

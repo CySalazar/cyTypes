@@ -1,10 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Attributes;
+using CyTypes.Core.Policy;
 using CyTypes.Primitives;
 
 namespace CyTypes.Benchmarks;
 
 [MemoryDiagnoser]
-public class CyStringBenchmarks : IDisposable
+[SuppressMessage("Reliability", "CA1001:Types that own disposable fields should be disposable")]
+public class CyStringBenchmarks
 {
     private CyString _a = null!;
     private CyString _b = null!;
@@ -14,36 +17,42 @@ public class CyStringBenchmarks : IDisposable
     [GlobalSetup]
     public void Setup()
     {
-        _a = new CyString("Hello, ");
-        _b = new CyString("World!");
-        _csv = new CyString("alpha,bravo,charlie,delta,echo");
-        _compareTarget = new CyString("Hello, ");
+        _a = new CyString("Hello, ", SecurityPolicy.Performance);
+        _b = new CyString("World!", SecurityPolicy.Performance);
+        _csv = new CyString("alpha,bravo,charlie,delta,echo", SecurityPolicy.Performance);
+        _compareTarget = new CyString("Hello, ", SecurityPolicy.Performance);
     }
 
     [GlobalCleanup]
-    public void Cleanup() => Dispose();
-
-    public void Dispose()
+    public void Cleanup()
     {
         _a?.Dispose();
         _b?.Dispose();
         _csv?.Dispose();
         _compareTarget?.Dispose();
-        GC.SuppressFinalize(this);
     }
 
     [Benchmark]
-    public CyString Concat() => _a + _b;
-
-    [Benchmark]
-    public CyString[] Split() => _csv.Split(',');
-
-    [Benchmark]
-    public CyString Roundtrip()
+    public string Concat()
     {
-        var cy = new CyString("benchmark test string");
-        _ = cy.ToInsecureString();
-        return cy;
+        using var result = _a + _b;
+        return result.ToInsecureString();
+    }
+
+    [Benchmark]
+    public int Split()
+    {
+        var parts = _csv.Split(',');
+        foreach (var part in parts)
+            part.Dispose();
+        return parts.Length;
+    }
+
+    [Benchmark]
+    public string Roundtrip()
+    {
+        using var cy = new CyString("benchmark test string", SecurityPolicy.Performance);
+        return cy.ToInsecureString();
     }
 
     [Benchmark]

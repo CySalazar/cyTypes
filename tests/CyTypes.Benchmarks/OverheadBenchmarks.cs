@@ -1,10 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Attributes;
+using CyTypes.Core.Policy;
 using CyTypes.Primitives;
 
 namespace CyTypes.Benchmarks;
 
 [MemoryDiagnoser]
-public class OverheadBenchmarks : IDisposable
+[SuppressMessage("Reliability", "CA1001:Types that own disposable fields should be disposable")]
+public class OverheadBenchmarks
 {
     private CyInt _cyA = null!;
     private CyInt _cyB = null!;
@@ -15,36 +18,41 @@ public class OverheadBenchmarks : IDisposable
     [GlobalSetup]
     public void Setup()
     {
-        _cyA = new CyInt(42);
-        _cyB = new CyInt(17);
-        _cyStrA = new CyString("Hello");
-        _cyStrB = new CyString("World");
-        _cyBytesA = new CyBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+        _cyA = new CyInt(42, SecurityPolicy.Performance);
+        _cyB = new CyInt(17, SecurityPolicy.Performance);
+        _cyStrA = new CyString("Hello", SecurityPolicy.Performance);
+        _cyStrB = new CyString("World", SecurityPolicy.Performance);
+        _cyBytesA = new CyBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, SecurityPolicy.Performance);
     }
 
     [GlobalCleanup]
-    public void Cleanup() => Dispose();
-
-    public void Dispose()
+    public void Cleanup()
     {
         _cyA?.Dispose();
         _cyB?.Dispose();
         _cyStrA?.Dispose();
         _cyStrB?.Dispose();
         _cyBytesA?.Dispose();
-        GC.SuppressFinalize(this);
     }
 
     // --- CyInt vs int ---
 
     [Benchmark]
-    public CyInt CyInt_Add() => _cyA + _cyB;
+    public int CyInt_Add()
+    {
+        using var result = _cyA + _cyB;
+        return result.ToInsecureInt();
+    }
 
     [Benchmark(Baseline = true)]
     public int Native_Add() => 42 + 17;
 
     [Benchmark]
-    public CyInt CyInt_Multiply() => _cyA * _cyB;
+    public int CyInt_Multiply()
+    {
+        using var result = _cyA * _cyB;
+        return result.ToInsecureInt();
+    }
 
     [Benchmark]
     public int Native_Multiply() => 42 * 17;
@@ -58,7 +66,11 @@ public class OverheadBenchmarks : IDisposable
     // --- CyString vs string ---
 
     [Benchmark]
-    public CyString CyString_Concat() => _cyStrA + _cyStrB;
+    public string CyString_Concat()
+    {
+        using var result = _cyStrA + _cyStrB;
+        return result.ToInsecureString();
+    }
 
     [Benchmark]
     public string Native_Concat() => "Hello" + "World";
@@ -80,10 +92,8 @@ public class OverheadBenchmarks : IDisposable
     [Benchmark]
     public byte[] CyBytes_Roundtrip()
     {
-        var cy = new CyBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
-        var result = cy.ToInsecureBytes();
-        cy.Dispose();
-        return result;
+        using var cy = new CyBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, SecurityPolicy.Performance);
+        return cy.ToInsecureBytes();
     }
 
     [Benchmark]

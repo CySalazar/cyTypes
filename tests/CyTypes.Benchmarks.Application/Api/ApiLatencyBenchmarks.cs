@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http;
 using System.Text;
 using BenchmarkDotNet.Attributes;
@@ -5,7 +6,8 @@ using BenchmarkDotNet.Attributes;
 namespace CyTypes.Benchmarks.Application.Api;
 
 [MemoryDiagnoser]
-public class ApiLatencyBenchmarks : IDisposable
+[SuppressMessage("Reliability", "CA1001:Types that own disposable fields should be disposable")]
+public class ApiLatencyBenchmarks
 {
     private CryptoApiHostFixture _fixture = null!;
     private HttpClient _client = null!;
@@ -20,13 +22,10 @@ public class ApiLatencyBenchmarks : IDisposable
     }
 
     [GlobalCleanup]
-    public void Cleanup() => Dispose();
-
-    public void Dispose()
+    public void Cleanup()
     {
         _client?.Dispose();
         _fixture?.Dispose();
-        GC.SuppressFinalize(this);
     }
 
     [Benchmark]
