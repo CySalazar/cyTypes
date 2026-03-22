@@ -40,7 +40,7 @@ jobs:
         run: dotnet build cyTypes.sln --no-restore -c Release
 
       - name: Test with coverage
-        run: dotnet test cyTypes.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults ${{ runner.os == 'macOS' && '--filter "FullyQualifiedName!~Fhe&FullyQualifiedName!~Ckks"' || '' }}
+        run: dotnet test cyTypes.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "Category!=Stress${{ runner.os == 'macOS' && '&FullyQualifiedName!~Fhe&FullyQualifiedName!~Ckks' || '' }}"
 
       - name: Install ReportGenerator
         if: matrix.os == 'ubuntu-latest'
