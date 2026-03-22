@@ -20,6 +20,7 @@ public static class Program
         ("EF Core Integration", EfCoreIntegration.Run),
         ("JSON Serialization", JsonSerialization.Run),
         ("Stream Encryption", StreamEncryption.Run),
+        ("CKKS Floating-Point FHE", CkksFloatingPoint.Run),
     ];
 
     public static void Main(string[] args)
