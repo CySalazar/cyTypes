@@ -67,6 +67,25 @@ int read = reader.Read(buffer);
 
 Atomic writes ensure that a crash during write does not corrupt the original file.
 
+### SecureFileOptions Reference
+
+| Property      | Type           | Default  | Description                                      |
+|---------------|----------------|----------|--------------------------------------------------|
+| `ChunkSize`   | `int`          | 65536    | Plaintext chunk size in bytes                    |
+| `Passphrase`  | `string?`      | `null`   | Optional passphrase for HKDF key derivation      |
+| `Flags`       | `StreamOption` | `None`   | Stream flags (see below)                         |
+| `AtomicWrite` | `bool`         | `true`   | Write to temp file, rename on dispose            |
+
+### StreamOption Flags
+
+| Flag                | Value | Description                                        |
+|---------------------|-------|----------------------------------------------------|
+| `None`              | 0     | No flags set                                       |
+| `PassphraseDerived` | 1     | The stream key was derived from a passphrase       |
+| `KeyExchange`       | 2     | The stream uses key exchange for session negotiation|
+
+Flags are set automatically when using passphrase-based or key-exchange constructors. They are persisted in the stream header for correct deserialization on read.
+
 ## IPC Streams (Named Pipes)
 
 `CyPipeServer` and `CyPipeClient` provide encrypted inter-process communication.

@@ -29,6 +29,19 @@ builder.Services.AddCyTypesFhe(sp =>
 });
 ```
 
+### CyTypesOptions Reference
+
+| Property                     | Type             | Default                  | Description                                       |
+|------------------------------|------------------|--------------------------|---------------------------------------------------|
+| `DefaultPolicy`              | `SecurityPolicy` | `SecurityPolicy.Default` | Default policy applied to new CyType instances    |
+| `EnableRedactingLogger`      | `bool`           | `true`                   | Register `RedactingLoggerProvider` automatically  |
+| `EnableAudit`                | `bool`           | `true`                   | Register `SecurityAuditor` as singleton           |
+| `EnableFhe`                  | `bool`           | `false`                  | Enable FHE support                                |
+| `FheScheme`                  | `FheScheme`      | `BFV`                    | FHE scheme to use when FHE is enabled             |
+| `EnablePqcKeyEncapsulation`  | `bool`           | `false`                  | Enable ML-KEM-1024 post-quantum key encapsulation |
+| `SecureBufferPoolSize`       | `int`            | 4096                     | Buffer size in bytes for the secure buffer pool   |
+| `SecureBufferPoolPreAllocate`| `int`            | 0                        | Number of buffers to pre-allocate at startup      |
+
 When the `IFheEngine` is first resolved from the container, `AddCyTypesFhe` automatically calls `FheEngineProvider.Configure(engine)`. After that, any `CyInt` or `CyLong` created with `SecurityPolicy.HomomorphicBasic` will use the registered engine.
 
 ## Full FHE Stack (BFV + CKKS + Comparisons + String Equality)

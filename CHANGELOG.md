@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `docs/policy-reference.md`: added missing `SecurityPolicy.HomomorphicFull` predefined policy section, documented `CharAccessMode` component, corrected `ArithmeticMode.HomomorphicFull` description (was marked "not yet available")
+- `docs/streaming-guide.md`: added `SecureFileOptions` property reference table and `StreamOption` flags documentation
+- `docs/di-fhe-guide.md`: added `CyTypesOptions` property reference table with all 8 properties and defaults
+- `docs/getting-started.md`: added Auto-Redacting Logging section documenting `RedactingLogger`, `RedactingLoggerProvider`, and `LoggingAuditSink`
+- `docs/security-model.md`: added `SecureBufferPool` documentation under Memory Protection
+
 ## [2.4.0] - 2026-03-22
 
 ### Added

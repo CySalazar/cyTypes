@@ -73,10 +73,25 @@ Enables FHE arithmetic (add, subtract, multiply) on integer types via Microsoft 
 | Taint             | `Standard`                           |
 | MaxDecryptionCount| 1000                                 |
 
+### `SecurityPolicy.HomomorphicFull`
+
+Enables full FHE stack: homomorphic arithmetic, homomorphic comparisons via encrypted difference, and deterministic string equality via AES-SIV. Requires `AllOperations` audit level.
+
+| Component         | Value                                |
+|-------------------|--------------------------------------|
+| Arithmetic        | `HomomorphicFull`                    |
+| Comparison        | `HomomorphicCircuit`                 |
+| StringOperations  | `HomomorphicEquality`                |
+| Memory            | `PinnedLocked`                       |
+| KeyRotation       | `EveryNOperations(1000)`             |
+| Audit             | `AllOperations`                      |
+| Taint             | `Standard`                           |
+| MaxDecryptionCount| 1000                                 |
+
 ## Policy Components
 
 ### ArithmeticMode
-- `HomomorphicFull` -- arbitrary FHE arithmetic (Phase 3b, not yet available)
+- `HomomorphicFull` -- full FHE arithmetic with homomorphic comparisons and deterministic string equality
 - `HomomorphicBasic` -- add, subtract, multiply on encrypted integers via SEAL BFV
 - `SecureEnclave` -- decrypt, compute, re-encrypt in-process
 
@@ -121,6 +136,10 @@ Enables FHE arithmetic (add, subtract, multiply) on integer types via Microsoft 
 ### StreamIntegrityMode
 - `PerChunkPlusFooter` -- GCM tag per chunk + HMAC-SHA512 footer
 - `PerChunkOnly` -- GCM tag per chunk, no footer
+
+### CharAccessMode
+- `CompromiseOnAccess` -- accessing a `CyString` character via indexer marks the instance as compromised (default)
+- `TaintOnAccess` -- accessing a character marks the instance as tainted instead of compromised
 
 ## Policy Resolution
 

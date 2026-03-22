@@ -37,6 +37,14 @@ Three levels are available via the `MemoryProtection` enum:
 
 All `SecureBuffer` instances zero their contents on disposal via `CryptographicOperations.ZeroMemory`. Plaintext byte arrays created during encrypt/decrypt are zeroed in `finally` blocks.
 
+### SecureBufferPool
+
+`SecureBufferPool` provides a thread-safe pool of `SecureBuffer` instances to reduce allocation pressure in high-throughput scenarios. Buffers are zeroed via `CryptographicOperations.ZeroMemory` on return and disposed when the pool is disposed.
+
+- `Rent()` — returns a buffer from the pool or allocates a new one if empty
+- `Return(buffer)` — zeros the buffer and returns it to the pool (disposed or mismatched buffers are silently ignored)
+- Configurable via DI with `CyTypesOptions.SecureBufferPoolSize` (buffer size, default 4096) and `SecureBufferPoolPreAllocate` (pre-allocation count)
+
 ### Verification
 
 Memory protection can be verified in practice using the included forensic tools:

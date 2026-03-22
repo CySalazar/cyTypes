@@ -143,6 +143,27 @@ See [pqc-guide.md](pqc-guide.md).
 File, IPC, and TCP streaming with chunked AES-256-GCM and automatic key exchange.
 See [streaming-guide.md](streaming-guide.md).
 
+## Auto-Redacting Logging
+
+The `CyTypes.Logging` package provides two components to prevent sensitive data leaking into logs:
+
+- **`RedactingLogger`** / **`RedactingLoggerProvider`** — wraps any `ILogger` or `ILoggerProvider` to scrub CyType metadata patterns, hex payloads (64+ chars), and base64 blobs (48+ chars) from log output.
+- **`LoggingAuditSink`** — an `IAuditSink` implementation that forwards security audit events (compromises, key rotations, decryptions) to `ILogger` with appropriate log levels.
+
+```csharp
+using CyTypes.Logging;
+using Microsoft.Extensions.Logging;
+
+// Wrap an existing logger provider with redaction
+loggerFactory.AddCyTypesRedaction(existingProvider);
+
+// Or use the audit sink to log security events
+var auditSink = new LoggingAuditSink(logger);
+// Register with SecurityAuditor to receive events
+```
+
+When using DI, set `EnableRedactingLogger = true` in `CyTypesOptions` (enabled by default) to register redaction automatically.
+
 ## Roslyn Analyzer
 
 Compile-time security checks (CY0001--CY0005) catch common mistakes like
