@@ -15,5 +15,20 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.ML.OnnxRuntime" />
     <PackageReference Include="Microsoft.ML.Tokenizers" />
+    <PackageReference Include="UglyToad.PdfPig" />
+    <PackageReference Include="MsgReader" />
+    <PackageReference Include="XstReader.Api" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="System.Data.Odbc" />
+    <PackageReference Include="Parquet.Net" />
+    <PackageReference Include="Apache.Avro" />
+    <PackageReference Include="SharpCompress" />
+    <PackageReference Include="MetadataExtractor" />
+    <PackageReference Include="Tesseract" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" />
+    <PackageReference Include="TagLibSharp" />
+    <PackageReference Include="Whisper.net" />
+    <PackageReference Include="Whisper.net.Runtime" />
+    <PackageReference Include="FFMpegCore" />
   </ItemGroup>
 </Project>
