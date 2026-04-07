@@ -184,6 +184,11 @@ public sealed class DataClassifier
         (DataClass.ApiKey,       new Regex(@"\bgh[ps]_[A-Za-z0-9]{36,}\b", RegexOptions.Compiled)), // GitHub
         (DataClass.ConnectionString, new Regex(@"(?:Server|Data Source|Host)\s*=\s*[^;]+;.*?(?:Password|Pwd)\s*=\s*[^;""']+", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
         (DataClass.ConnectionString, new Regex(@"(?:postgres|mysql|mongodb|redis)(?:\+\w+)?://[^:\s]+:[^@\s]+@[^/\s]+", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+        // Password with keyword context: matches "password=Hunter2024!", "pwd: secret",
+        // "passw0rd : whatever", "password temporanea Hunter2024" (it), etc.
+        // Captures from a password-keyword up to whitespace / quote / line end.
+        // Won't match bare passwords without context (impossible without semantics).
+        (DataClass.Password, new Regex(@"(?:password|passwd|pwd|passw[o0]rd|contrase[ñn]a|mot\s*de\s*passe|kennwort|senha)(?:\s*temporanea)?\s*[:=]?\s*['""]?(?<v>[^\s'""<>;]{6,64})", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
     };
 
     private static IEnumerable<Finding> BuiltInRegex(string text)
@@ -196,8 +201,19 @@ public sealed class DataClassifier
                 {
                     var digits = m.Value.Count(char.IsDigit);
                     if (digits < 7 || digits > 15) continue; // E.164 max
+                    // Suppress phone matches that occur inside binary noise
+                    // (MP4 box dumps, raw image bytes, etc.) by requiring a
+                    // human-readable surrounding context.
+                    if (!HasReadableContext(text, m.Index, m.Length, minRatio: 0.75)) continue;
                 }
-                yield return new Finding(cls, m.Value.Trim(), m.Index, m.Length, 0.9, DetectionMethod.Regex);
+                // Some patterns use a named group "v" to isolate the actual
+                // sensitive value (e.g. the password regex captures the keyword
+                // for context but only the value should appear in the finding).
+                var valueGroup = m.Groups["v"];
+                if (valueGroup.Success && !string.IsNullOrEmpty(valueGroup.Value))
+                    yield return new Finding(cls, valueGroup.Value.Trim(), valueGroup.Index, valueGroup.Length, 0.9, DetectionMethod.Regex);
+                else
+                    yield return new Finding(cls, m.Value.Trim(), m.Index, m.Length, 0.9, DetectionMethod.Regex);
             }
     }
 
@@ -271,9 +287,44 @@ public sealed class DataClassifier
         if (salary.Success)
             yield return new Finding(DataClass.Salary, salary.Value, salary.Index, salary.Length, 0.75, DetectionMethod.Heuristic);
 
-        // Naive person-name: two consecutive Capitalized words
+        // Naive person-name: two consecutive Capitalized words.
+        // Wrap in a printable-ratio context filter to suppress false positives
+        // when the heuristic is run over binary content (e.g. byte dumps from
+        // BMP/WebP/HEIC/MP4 boxes that occasionally produce ASCII sequences
+        // matching the regex by accident).
         foreach (Match m in Regex.Matches(text, @"\b[A-Z][a-zà-ú]+\s+[A-Z][a-zà-ú]+\b"))
+        {
+            if (!HasReadableContext(text, m.Index, m.Length, minRatio: 0.75)) continue;
             yield return new Finding(DataClass.PersonName, m.Value, m.Index, m.Length, 0.6, DetectionMethod.Heuristic);
+        }
+    }
+
+    /// <summary>
+    /// Returns true if the surrounding 80-character window of <paramref name="text"/>
+    /// around <paramref name="matchStart"/> looks like human-readable text
+    /// (printable ASCII / common Unicode letters) at a ratio of at least
+    /// <paramref name="minRatio"/>. Used by heuristic detectors to suppress
+    /// false positives on binary dumps.
+    /// </summary>
+    internal static bool HasReadableContext(string text, int matchStart, int matchLength, double minRatio = 0.75, int windowRadius = 40)
+    {
+        if (text.Length == 0) return true;
+        int from = Math.Max(0, matchStart - windowRadius);
+        int to = Math.Min(text.Length, matchStart + matchLength + windowRadius);
+        int total = to - from;
+        if (total <= 0) return true;
+        int readable = 0;
+        for (int i = from; i < to; i++)
+        {
+            char c = text[i];
+            // ASCII printable + whitespace
+            if ((c >= 0x20 && c < 0x7F) || c == '\n' || c == '\r' || c == '\t')
+            { readable++; continue; }
+            // Common European/CJK letters and punctuation
+            if (char.IsLetter(c) || char.IsPunctuation(c) || char.IsWhiteSpace(c))
+            { readable++; continue; }
+        }
+        return (double)readable / total >= minRatio;
     }
 
     private static bool LuhnCheck(string raw)
