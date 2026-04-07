@@ -34,7 +34,13 @@ public enum DataClass
     SexualOrientation,
     ChildData,
     FinancialAccount,
-    HealthRecord
+    HealthRecord,
+    /// <summary>
+    /// Custom company-defined category. Use together with <see cref="Finding.CustomLabel"/>
+    /// to disambiguate the actual data type (e.g. "AcmeProjectCode", "InternalTicketId").
+    /// The PiiTokenizer derives the token prefix from the slugified CustomLabel.
+    /// </summary>
+    Custom
 }
 
 public enum DetectionMethod { Regex, Heuristic, LocalLlm, Plugin }
@@ -46,7 +52,8 @@ public sealed record Finding(
     int Length,
     double Confidence,
     DetectionMethod DetectionMethod,
-    string? Source = null);
+    string? Source = null,
+    string? CustomLabel = null);
 
 public sealed class ClassificationResult
 {
@@ -137,6 +144,12 @@ public sealed class DataClassifier
         DataClass.NationalId => 90,
         DataClass.Email => 90,
         DataClass.ApiKey => 90,
+        DataClass.Password => 88,
+        // Company-custom categories sit between API keys and URLs:
+        // higher than infrastructure data (Url/IpAddress) so a company token
+        // dominates an URL match, but lower than Iban/PAN/SSN which never
+        // realistically appear inside a custom span.
+        DataClass.Custom => 87,
         DataClass.Url => 80,
         DataClass.IpAddress => 75,
         DataClass.Phone => 60,

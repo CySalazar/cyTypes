@@ -71,23 +71,42 @@ public sealed class PiiTokenizer : IDisposable
         return token;
     }
 
-    private static string TypeForToken(Finding f) => f.DataClass switch
+    private static string TypeForToken(Finding f)
     {
-        Classification.DataClass.Email => "email",
-        Classification.DataClass.PersonName => "person",
-        Classification.DataClass.Phone => "phone",
-        Classification.DataClass.Iban => "iban",
-        Classification.DataClass.CreditCard => "card",
-        Classification.DataClass.IpAddress => "ip",
-        Classification.DataClass.ApiKey => "apikey",
-        Classification.DataClass.MedicalTerm => "medical",
-        Classification.DataClass.NationalId => "natid",
-        Classification.DataClass.FiscalCode => "fiscal",
-        Classification.DataClass.Salary => "salary",
-        Classification.DataClass.Url => "url",
-        Classification.DataClass.Address => "addr",
-        _ => f.DataClass.ToString().ToLowerInvariant()
-    };
+        // Custom company-defined classes use the slugified CustomLabel as
+        // token prefix, falling back to "custom" if no label is provided.
+        if (f.DataClass == Classification.DataClass.Custom)
+            return string.IsNullOrWhiteSpace(f.CustomLabel) ? "custom" : Slug(f.CustomLabel!);
+        return f.DataClass switch
+        {
+            Classification.DataClass.Email => "email",
+            Classification.DataClass.PersonName => "person",
+            Classification.DataClass.Phone => "phone",
+            Classification.DataClass.Iban => "iban",
+            Classification.DataClass.CreditCard => "card",
+            Classification.DataClass.IpAddress => "ip",
+            Classification.DataClass.ApiKey => "apikey",
+            Classification.DataClass.Password => "password",
+            Classification.DataClass.MedicalTerm => "medical",
+            Classification.DataClass.NationalId => "natid",
+            Classification.DataClass.FiscalCode => "fiscal",
+            Classification.DataClass.Salary => "salary",
+            Classification.DataClass.Url => "url",
+            Classification.DataClass.Address => "addr",
+            _ => f.DataClass.ToString().ToLowerInvariant()
+        };
+    }
+
+    private static string Slug(string s)
+    {
+        var sb = new StringBuilder(s.Length);
+        foreach (var ch in s.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch)) sb.Append(ch);
+            else if (sb.Length > 0 && sb[sb.Length - 1] != '-') sb.Append('-');
+        }
+        return sb.ToString().Trim('-');
+    }
 
     private static string SalaryBucket(string value)
     {

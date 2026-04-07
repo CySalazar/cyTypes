@@ -43,6 +43,7 @@ public sealed class GlinerClassifier : ILocalClassifier, IDisposable
         ("biometric identifier",            DataClass.Biometric,         0.45f),
         ("ip address",                      DataClass.IpAddress,         0.55f),
         ("api key or secret",               DataClass.ApiKey,            0.55f),
+        ("password or credential",          DataClass.Password,          0.55f),
         ("database connection string",      DataClass.ConnectionString,  0.55f),
     };
 
