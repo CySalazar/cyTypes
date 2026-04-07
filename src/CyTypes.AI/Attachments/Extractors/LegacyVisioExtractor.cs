@@ -25,42 +25,51 @@ public sealed class LegacyVisioExtractor : ExtractorBase
         if (!IsLibreOfficeAvailable())
             throw new InvalidOperationException("LibreOffice ('soffice') not found in PATH. Install libreoffice-core to enable .vsd extraction.");
 
-        // Materialise to a temp file for LibreOffice.
-        string tempDir = Path.Combine(Path.GetTempPath(), $"vsd-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-        string vsdPath = Path.Combine(tempDir, fileName);
-        try
+        // Use a per-call private temp directory and a fixed safe inner filename
+        // (`input.vsd`) instead of trusting the caller-supplied name. This:
+        //   1. Avoids any chance of command injection via filename metacharacters
+        //   2. Prevents the symlink-race attack on /tmp because Directory.CreateDirectory
+        //      is atomic and the directory is owned by us
+        //   3. Makes the cleanup deterministic (Dispose deletes the whole subtree)
+        using var tempDir = new SafeTempDir("vsd-");
+        var vsdPath = Path.Combine(tempDir.Path, "input.vsd");
+        await using (var fs = File.Create(vsdPath))
         {
-            using (var fs = File.Create(vsdPath))
-            {
-                stream.Position = 0;
-                await stream.CopyToAsync(fs, ct);
-            }
-
-            var psi = new ProcessStartInfo("soffice", $"--headless --convert-to pdf \"{vsdPath}\" --outdir \"{tempDir}\"")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using var p = Process.Start(psi)!;
-            await p.WaitForExitAsync(ct);
-            if (p.ExitCode != 0)
-                throw new InvalidOperationException($"LibreOffice exited with code {p.ExitCode}: {await p.StandardError.ReadToEndAsync(ct)}");
-
-            var pdfPath = Path.Combine(tempDir, Path.GetFileNameWithoutExtension(fileName) + ".pdf");
-            if (!File.Exists(pdfPath))
-                throw new InvalidOperationException("LibreOffice did not produce a PDF output");
-
-            using var pdfStream = File.OpenRead(pdfPath);
-            var result = await AttachmentExtractor.ExtractAsync(pdfStream, Path.GetFileName(pdfPath), ct);
-            return result.HasError ? $"(inner PDF extractor error: {result.Error})" : result.Text;
+            stream.Position = 0;
+            await stream.CopyToAsync(fs, ct);
         }
-        finally
+
+        // Use ArgumentList instead of an interpolated Arguments string so that
+        // each argument is passed as a separate argv entry — no shell parsing,
+        // no quoting bugs, no command injection surface.
+        var psi = new ProcessStartInfo("soffice")
         {
-            try { Directory.Delete(tempDir, recursive: true); } catch { }
-        }
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add("--headless");
+        psi.ArgumentList.Add("--convert-to");
+        psi.ArgumentList.Add("pdf");
+        psi.ArgumentList.Add(vsdPath);
+        psi.ArgumentList.Add("--outdir");
+        psi.ArgumentList.Add(tempDir.Path);
+
+        using var p = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start 'soffice' process.");
+        await p.WaitForExitAsync(ct);
+        if (p.ExitCode != 0)
+            throw new InvalidOperationException(
+                $"LibreOffice exited with code {p.ExitCode}: {await p.StandardError.ReadToEndAsync(ct)}");
+
+        var pdfPath = Path.Combine(tempDir.Path, "input.pdf");
+        if (!File.Exists(pdfPath))
+            throw new InvalidOperationException("LibreOffice did not produce a PDF output");
+
+        await using var pdfStream = File.OpenRead(pdfPath);
+        var result = await AttachmentExtractor.ExtractAsync(pdfStream, "input.pdf", ct);
+        return result.HasError ? $"(inner PDF extractor error: {result.Error})" : result.Text;
     }
 
     private static bool IsLibreOfficeAvailable()

@@ -17,40 +17,28 @@ public sealed class XstExtractor : EmailExtractorBase
     protected override Task<string> ExtractTextAsync(Stream stream, string fileName, CancellationToken ct)
     {
         // XstReader requires a path, not a stream. If we got a non-FileStream,
-        // dump to a temp file first.
-        string path;
-        string? tempPath = null;
+        // dump to an atomic per-call temp directory.
         if (stream is FileStream fs)
-        {
-            path = fs.Name;
-        }
-        else
-        {
-            tempPath = Path.Combine(Path.GetTempPath(), $"xst-{Guid.NewGuid():N}{Path.GetExtension(fileName)}");
-            using (var temp = File.Create(tempPath))
-            {
-                stream.Position = 0;
-                stream.CopyTo(temp);
-            }
-            path = tempPath;
-        }
+            return Task.FromResult(WalkPst(fs.Name, ct));
 
-        try
+        using var safeDir = new SafeTempDir("xst-");
+        var tempPath = Path.Combine(safeDir.Path, "store" + Path.GetExtension(fileName));
+        using (var temp = File.Create(tempPath))
         {
-            using var xst = new XstFile(path);
-            var sb = new StringBuilder();
-            int messageCount = 0;
-            WalkFolder(xst.RootFolder, sb, ref messageCount, ct);
-            sb.Insert(0, $"=== PST store: {messageCount} messages ===\n\n");
-            return Task.FromResult(sb.ToString());
+            stream.Position = 0;
+            stream.CopyTo(temp);
         }
-        finally
-        {
-            if (tempPath is not null && File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { /* best-effort */ }
-            }
-        }
+        return Task.FromResult(WalkPst(tempPath, ct));
+    }
+
+    private static string WalkPst(string path, CancellationToken ct)
+    {
+        using var xst = new XstFile(path);
+        var sb = new StringBuilder();
+        int messageCount = 0;
+        WalkFolder(xst.RootFolder, sb, ref messageCount, ct);
+        sb.Insert(0, $"=== PST store: {messageCount} messages ===\n\n");
+        return sb.ToString();
     }
 
     private static void WalkFolder(XstFolder folder, StringBuilder sb, ref int counter, CancellationToken ct)

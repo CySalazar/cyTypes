@@ -38,6 +38,10 @@ public static class TessdataDownloader
 
     private static void DownloadFile(string url, string dest)
     {
+        // SSRF defense: only allow URLs that point at known public model
+        // hosting hosts and don't resolve to private IPs. The base URL is
+        // env-overridable so this check is essential.
+        SafeUrlValidator.EnsureSafe(url);
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("CyTypes.AI/1.0");
         using var resp = http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult();

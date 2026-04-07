@@ -35,6 +35,9 @@ public static class WhisperModelDownloader
 
     private static void DownloadFile(string url, string dest)
     {
+        // SSRF defense: see SafeUrlValidator. Whisper.cpp ggml models are
+        // hosted on huggingface.co so the allow-list covers them.
+        SafeUrlValidator.EnsureSafe(url);
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("CyTypes.AI/1.0");
         using var resp = http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult();

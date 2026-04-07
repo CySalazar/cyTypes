@@ -54,8 +54,14 @@ public abstract class ExtractorBase : IAttachmentExtractor
                 owned?.Dispose();
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException
+                                && ex is not StackOverflowException
+                                && ex is not ThreadAbortException)
         {
+            // Critical runtime conditions are intentionally re-thrown above:
+            // OOM/SOE are unrecoverable and ThreadAbortException is host-policy.
+            // Everything else gets wrapped in ExtractedContent.Error so the
+            // scanner can keep going to the next attachment.
             return new ExtractedContent(
                 FileName: fileName,
                 Format: Format,

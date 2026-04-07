@@ -14,19 +14,18 @@ public sealed class SqliteExtractor : DatabaseExtractorBase
     protected override IEnumerable<(string table, string column, string value)> EnumerateStringValues(
         Stream stream, string fileName, CancellationToken ct)
     {
-        // Sqlite needs a file path. Dump the stream to a temp file if it's not already a FileStream.
+        // Sqlite needs a file path. If we don't already have one, dump the
+        // stream into an atomic per-call SafeTempDir which gets nuked on Dispose.
         string path;
-        string? tempPath = null;
+        SafeTempDir? safeDir = null;
         if (stream is FileStream fs) path = fs.Name;
         else
         {
-            tempPath = Path.Combine(Path.GetTempPath(), $"sqlite-{Guid.NewGuid():N}.db");
-            using (var temp = File.Create(tempPath))
-            {
-                stream.Position = 0;
-                stream.CopyTo(temp);
-            }
-            path = tempPath;
+            safeDir = new SafeTempDir("sqlite-");
+            path = Path.Combine(safeDir.Path, "db.sqlite");
+            using var temp = File.Create(path);
+            stream.Position = 0;
+            stream.CopyTo(temp);
         }
 
         SqliteConnection? conn = null;
@@ -57,10 +56,7 @@ public sealed class SqliteExtractor : DatabaseExtractorBase
         finally
         {
             conn?.Dispose();
-            if (tempPath is not null && File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { /* best-effort */ }
-            }
+            safeDir?.Dispose();
         }
     }
 

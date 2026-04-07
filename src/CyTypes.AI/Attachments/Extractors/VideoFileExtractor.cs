@@ -38,16 +38,18 @@ public sealed class VideoFileExtractor : ExtractorBase
         var sb = new StringBuilder();
         sb.AppendLine($"=== Video: {fileName} ===");
 
-        // Materialise to a temp file because FFMpeg + TagLib both want a path.
-        string tempPath = Path.Combine(Path.GetTempPath(), $"vid-{Guid.NewGuid():N}{Path.GetExtension(fileName)}");
+        // Use an atomic per-call private temp directory (defends against
+        // /tmp symlink races) and fixed inner filenames so we never reflect
+        // attacker-controlled filename data into Process arguments.
+        using var safeDir = new SafeTempDir("vid-");
+        var tempPath = Path.Combine(safeDir.Path, "input" + Path.GetExtension(fileName));
+        {
+            await using var fs = File.Create(tempPath);
+            stream.Position = 0;
+            await stream.CopyToAsync(fs, ct);
+        }
         try
         {
-            using (var fs = File.Create(tempPath))
-            {
-                stream.Position = 0;
-                await stream.CopyToAsync(fs, ct);
-            }
-
             // ---- Phase 1: container metadata ----
             try
             {
@@ -74,7 +76,7 @@ public sealed class VideoFileExtractor : ExtractorBase
             }
 
             // ---- Phase 2: audio → STT ----
-            string audioTemp = tempPath + ".wav";
+            string audioTemp = Path.Combine(safeDir.Path, "audio.wav");
             try
             {
                 await FFMpegArguments
@@ -97,12 +99,12 @@ public sealed class VideoFileExtractor : ExtractorBase
                 }
             }
             catch (Exception ex) { sb.AppendLine($"(audio extraction failed: {ex.Message})"); }
-            finally { try { if (System.IO.File.Exists(audioTemp)) System.IO.File.Delete(audioTemp); } catch { } }
+            // audioTemp lives inside safeDir and is wiped on Dispose
 
             // ---- Phase 3: frame OCR ----
             try
             {
-                var frames = await ExtractFramesAsync(tempPath, ct);
+                var frames = await ExtractFramesAsync(tempPath, safeDir, ct);
                 var seenHashes = new HashSet<string>();
                 int ocrFrames = 0;
                 foreach (var frame in frames)
@@ -122,15 +124,12 @@ public sealed class VideoFileExtractor : ExtractorBase
             }
             catch (Exception ex) { sb.AppendLine($"(frame extraction failed: {ex.Message})"); }
         }
-        finally
-        {
-            try { if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath); } catch { }
-        }
+        finally { /* safeDir auto-cleaned on Dispose */ }
 
         return sb.ToString();
     }
 
-    private static async Task<List<byte[]>> ExtractFramesAsync(string videoPath, CancellationToken ct)
+    private static async Task<List<byte[]>> ExtractFramesAsync(string videoPath, SafeTempDir safeDir, CancellationToken ct)
     {
         var frames = new List<byte[]>();
         var probe = await FFProbe.AnalyseAsync(videoPath);
@@ -141,7 +140,10 @@ public sealed class VideoFileExtractor : ExtractorBase
         {
             ct.ThrowIfCancellationRequested();
             var atSeconds = i * FrameIntervalSeconds;
-            var framePath = Path.Combine(Path.GetTempPath(), $"frm-{Guid.NewGuid():N}.png");
+            // Frame files live inside the same per-call SafeTempDir as the
+            // input, so they get wiped together on Dispose. Predictable name
+            // is fine because the parent directory is private.
+            var framePath = Path.Combine(safeDir.Path, $"frame_{i:D3}.png");
             try
             {
                 await FFMpegArguments
@@ -154,7 +156,6 @@ public sealed class VideoFileExtractor : ExtractorBase
                     frames.Add(await System.IO.File.ReadAllBytesAsync(framePath, ct));
             }
             catch { /* skip frame */ }
-            finally { try { if (System.IO.File.Exists(framePath)) System.IO.File.Delete(framePath); } catch { } }
         }
         return frames;
     }

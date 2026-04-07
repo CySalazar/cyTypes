@@ -16,19 +16,19 @@ public sealed class MdbExtractor : DatabaseExtractorBase
     protected override IEnumerable<(string table, string column, string value)> EnumerateStringValues(
         Stream stream, string fileName, CancellationToken ct)
     {
-        // Need a path for ODBC.
+        // Need a path for ODBC. Use a SafeTempDir so the temp file lives
+        // inside an atomically-created private directory and gets deleted
+        // recursively on Dispose, even if ODBC throws.
         string path;
-        string? tempPath = null;
+        SafeTempDir? safeDir = null;
         if (stream is FileStream fs) path = fs.Name;
         else
         {
-            tempPath = Path.Combine(Path.GetTempPath(), $"mdb-{Guid.NewGuid():N}.mdb");
-            using (var temp = File.Create(tempPath))
-            {
-                stream.Position = 0;
-                stream.CopyTo(temp);
-            }
-            path = tempPath;
+            safeDir = new SafeTempDir("mdb-");
+            path = Path.Combine(safeDir.Path, "db.mdb");
+            using var temp = File.Create(path);
+            stream.Position = 0;
+            stream.CopyTo(temp);
         }
 
         OdbcConnection? conn = null;
@@ -78,10 +78,7 @@ public sealed class MdbExtractor : DatabaseExtractorBase
         finally
         {
             conn?.Dispose();
-            if (tempPath is not null && File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { }
-            }
+            safeDir?.Dispose();
         }
     }
 
