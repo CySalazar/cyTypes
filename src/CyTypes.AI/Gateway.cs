@@ -289,23 +289,79 @@ public sealed class CyAI
 
     public IReadOnlyCollection<string> ProviderNames => _providers.Keys;
 
-    public async Task<AIResponse> Ask(string prompt, string provider, string userId, CancellationToken ct = default)
+    public Task<AIResponse> Ask(string prompt, string provider, string userId, CancellationToken ct = default)
+        => AskCore(
+            systemPrompt: null,
+            messages: new[] { new ChatMessage("user", prompt) },
+            provider: provider,
+            userId: userId,
+            ct: ct);
+
+    /// <summary>
+    /// Multi-turn overload. Applies the full CyTypes.AI compliance pipeline
+    /// (PromptGuard → DataClassifier → PiiTokenizer → plugin rules → budget →
+    /// provider → ResponseValidator → detokenize) to every turn in the
+    /// conversation and forwards the tokenized transcript to the provider via
+    /// its native chat API. Callers must pass the messages in chronological
+    /// order; each <see cref="ChatMessage.Role"/> should be one of "system",
+    /// "user" or "assistant".
+    /// </summary>
+    public Task<AIResponse> Ask(
+        IReadOnlyList<ChatMessage> messages,
+        string? systemPrompt,
+        string provider,
+        string userId,
+        CancellationToken ct = default)
+        => AskCore(systemPrompt, messages, provider, userId, ct);
+
+    private async Task<AIResponse> AskCore(
+        string? systemPrompt,
+        IReadOnlyList<ChatMessage> messages,
+        string provider,
+        string userId,
+        CancellationToken ct)
     {
         var corr = Guid.NewGuid().ToString("n");
-        _audit.Append(corr, "RequestStart", $"user={userId} provider={provider}");
+        _audit.Append(corr, "RequestStart", $"user={userId} provider={provider} turns={messages.Count}");
 
-        var guard = _guard.Sanitize(prompt);
-        if (guard.InjectionDetected)
+        // Injection check + classify run per-turn; a single injected message is
+        // enough to block the whole request. Findings are aggregated for the
+        // compliance gate.
+        var classifiedTurns = new List<(string role, string sanitized, ClassificationResult cls)>(messages.Count);
+        ClassificationResult? systemCls = null;
+        string? sanitizedSystem = null;
+
+        if (!string.IsNullOrEmpty(systemPrompt))
         {
-            _audit.Append(corr, "ComplianceBlocked", $"prompt-injection: {string.Join(",", guard.SuspiciousPatterns)}");
-            return new AIResponse { CorrelationId = corr, Blocked = true, BlockReason = "prompt injection", Provider = provider };
+            var sGuard = _guard.Sanitize(systemPrompt!);
+            if (sGuard.InjectionDetected)
+            {
+                _audit.Append(corr, "ComplianceBlocked", $"prompt-injection(system): {string.Join(",", sGuard.SuspiciousPatterns)}");
+                return new AIResponse { CorrelationId = corr, Blocked = true, BlockReason = "prompt injection", Provider = provider };
+            }
+            sanitizedSystem = sGuard.SanitizedPrompt;
+            systemCls = _classifier.Classify(sanitizedSystem);
         }
 
-        var classification = _classifier.Classify(guard.SanitizedPrompt);
-        _audit.Append(corr, "PiiClassified", $"findings={classification.Findings.Count}");
+        foreach (var m in messages)
+        {
+            var guard = _guard.Sanitize(m.Content ?? string.Empty);
+            if (guard.InjectionDetected)
+            {
+                _audit.Append(corr, "ComplianceBlocked", $"prompt-injection({m.Role}): {string.Join(",", guard.SuspiciousPatterns)}");
+                return new AIResponse { CorrelationId = corr, Blocked = true, BlockReason = "prompt injection", Provider = provider };
+            }
+            var cls = _classifier.Classify(guard.SanitizedPrompt);
+            classifiedTurns.Add((m.Role, guard.SanitizedPrompt, cls));
+        }
 
-        // Compliance enforcement
-        var blocked = classification.Findings
+        int totalFindings = classifiedTurns.Sum(t => t.cls.Findings.Count) + (systemCls?.Findings.Count ?? 0);
+        _audit.Append(corr, "PiiClassified", $"findings={totalFindings}");
+
+        // Aggregate compliance-block decisions across every turn.
+        var allFindings = classifiedTurns.SelectMany(t => t.cls.Findings).ToList();
+        if (systemCls != null) allFindings.AddRange(systemCls.Findings);
+        var blocked = allFindings
             .SelectMany(f => _o.Plugins.SelectMany(p => p.GetRules().Where(r => r.DataClass == f.DataClass && r.Action == DataAction.Block)))
             .ToList();
         if (blocked.Count > 0)
@@ -315,8 +371,24 @@ public sealed class CyAI
         }
 
         using var tokenizer = new PiiTokenizer(corr);
-        var tok = tokenizer.Tokenize(guard.SanitizedPrompt, classification.Findings);
-        _audit.Append(corr, "PiiTokenized", $"count={tok.TokenCount}");
+        int totalTokenizedCount = 0;
+
+        string? tokenizedSystem = null;
+        if (sanitizedSystem != null && systemCls != null)
+        {
+            var sTok = tokenizer.Tokenize(sanitizedSystem, systemCls.Findings);
+            tokenizedSystem = sTok.TokenizedText;
+            totalTokenizedCount += sTok.TokenCount;
+        }
+
+        var tokenizedTurns = new List<ChatMessage>(classifiedTurns.Count);
+        foreach (var t in classifiedTurns)
+        {
+            var tok = tokenizer.Tokenize(t.sanitized, t.cls.Findings);
+            totalTokenizedCount += tok.TokenCount;
+            tokenizedTurns.Add(new ChatMessage(t.role, tok.TokenizedText));
+        }
+        _audit.Append(corr, "PiiTokenized", $"count={totalTokenizedCount}");
         _audit.Append(corr, "CompliancePassed", $"plugins={_o.Plugins.Count}");
 
         if (!_providers.TryGetValue(provider, out var prov))
@@ -330,7 +402,10 @@ public sealed class CyAI
 
         _audit.Append(corr, "ProviderCallStart", $"model={prov.Model}");
         ProviderCallResult call;
-        try { call = await prov.CompleteAsync(tok.TokenizedText, ct); }
+        try
+        {
+            call = await prov.CompleteAsync(tokenizedTurns, tokenizedSystem, ct);
+        }
         catch (Exception ex)
         {
             _audit.Append(corr, "ProviderCallError", ex.GetType().Name);
@@ -345,13 +420,13 @@ public sealed class CyAI
             _audit.Append(corr, "ResponseSecurityIssues", $"count={validation.Issues.Count}");
 
         var detok = tokenizer.Detokenize(call.Text);
-        _audit.Append(corr, "PiiRestored", $"tokens={tok.TokenCount}");
+        _audit.Append(corr, "PiiRestored", $"tokens={totalTokenizedCount}");
         _audit.Append(corr, "RequestComplete", "ok");
 
         return new AIResponse
         {
             Response = detok,
-            PiiTokenized = tok.TokenCount,
+            PiiTokenized = totalTokenizedCount,
             Cost = call.EstimatedCost,
             CorrelationId = corr,
             Provider = provider,
