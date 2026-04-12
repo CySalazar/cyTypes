@@ -12,6 +12,9 @@ public sealed class CyNetworkServer : IDisposable
     private bool _isDisposed;
     private bool _isStarted;
 
+    /// <summary>Gets or sets the maximum duration allowed for the handshake phase. Defaults to 30 seconds.</summary>
+    public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// Creates a new <see cref="CyNetworkServer"/> bound to the given endpoint.
     /// </summary>
@@ -49,6 +52,7 @@ public sealed class CyNetworkServer : IDisposable
 
         var tcpClient = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
         var cyStream = new CyNetworkStream(tcpClient);
+        cyStream.HandshakeTimeout = HandshakeTimeout;
 
         await cyStream.HandshakeAsResponderAsync(ct).ConfigureAwait(false);
         return cyStream;

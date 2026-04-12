@@ -10,6 +10,9 @@ public sealed class CyPipeServer : IDisposable
     private readonly string _pipeName;
     private bool _isDisposed;
 
+    /// <summary>Gets or sets the maximum duration allowed for the handshake phase. Defaults to 30 seconds.</summary>
+    public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// Creates a new <see cref="CyPipeServer"/> listening on the given pipe name.
     /// </summary>
@@ -38,6 +41,7 @@ public sealed class CyPipeServer : IDisposable
         await serverPipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
 
         var cyPipe = new CyPipeStream(serverPipe);
+        cyPipe.HandshakeTimeout = HandshakeTimeout;
         await cyPipe.HandshakeAsResponderAsync(ct).ConfigureAwait(false);
 
         return cyPipe;

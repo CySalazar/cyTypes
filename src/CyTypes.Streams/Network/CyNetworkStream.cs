@@ -10,19 +10,25 @@ namespace CyTypes.Streams.Network;
 /// <summary>
 /// Provides bidirectional encrypted communication over TCP after
 /// hybrid key exchange (ECDH P-256 + ML-KEM-1024).
-/// Supports heartbeat and configurable timeouts.
+/// Supports heartbeat, configurable timeouts, protocol versioning,
+/// and optional HMAC-SHA256 frame authentication (V2+).
 /// </summary>
 public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
 {
+    private static readonly byte[] FrameHmacInfo = "CyTypes.FrameHMAC"u8.ToArray();
+
     private readonly NetworkStream _networkStream;
     private readonly TcpClient _tcpClient;
     private ChunkedCryptoEngine? _engine;
     private SecureBuffer? _sessionKey;
+    private SecureBuffer? _frameHmacKey;
     private long _sendSequence;
     private long _receiveSequence;
     private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
     private bool _isConnected;
     private Timer? _heartbeatTimer;
+    private byte _negotiatedVersion;
+    private ProtocolCapabilities _negotiatedCapabilities;
 
     /// <summary>Gets or sets the heartbeat interval. Set to <see cref="TimeSpan.Zero"/> to disable.</summary>
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
@@ -30,8 +36,17 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// <summary>Gets or sets the receive timeout.</summary>
     public TimeSpan ReceiveTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>Gets or sets the maximum duration allowed for the handshake phase. Defaults to 30 seconds.</summary>
+    public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>Gets whether the handshake has completed.</summary>
     public bool IsConnected => _isConnected;
+
+    /// <summary>Gets the negotiated protocol version after handshake.</summary>
+    public byte NegotiatedVersion => _negotiatedVersion;
+
+    /// <summary>Gets the negotiated capabilities after handshake.</summary>
+    public ProtocolCapabilities NegotiatedCapabilities => _negotiatedCapabilities;
 
     internal CyNetworkStream(TcpClient tcpClient)
     {
@@ -44,33 +59,49 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// </summary>
     internal async Task HandshakeAsInitiatorAsync(CancellationToken ct = default)
     {
-        using var negotiator = new SessionKeyNegotiator();
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (HandshakeTimeout > TimeSpan.Zero && HandshakeTimeout != Timeout.InfiniteTimeSpan)
+            timeoutCts.CancelAfter(HandshakeTimeout);
+        var effectiveCt = timeoutCts.Token;
 
-        // Send our handshake
-        var handshake = negotiator.CreateHandshake();
-        var handshakeBytes = handshake.Serialize();
-        await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Handshake, handshakeBytes, ct: ct)
-            .ConfigureAwait(false);
+        try
+        {
+            using var negotiator = new SessionKeyNegotiator();
 
-        // Receive responder handshake
-        var responderFrame = await CyWireProtocol.ReadFrameAsync(_networkStream, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("Connection closed during handshake.");
-        if (responderFrame.Type != FrameType.Handshake)
-            throw new InvalidOperationException($"Expected Handshake frame, got {responderFrame.Type}.");
+            // Send our V2 handshake with VersionedPayload flag
+            var handshake = negotiator.CreateHandshake();
+            var handshakeBytes = handshake.Serialize();
+            await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Handshake, handshakeBytes,
+                FrameFlags.VersionedPayload, effectiveCt).ConfigureAwait(false);
 
-        var responderHandshake = HandshakeMessage.Deserialize(responderFrame.Payload);
+            // Receive responder handshake
+            var responderFrame = await CyWireProtocol.ReadFrameAsync(_networkStream, effectiveCt).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Connection closed during handshake.");
+            if (responderFrame.Type != FrameType.Handshake)
+                throw new InvalidOperationException($"Expected Handshake frame, got {responderFrame.Type}.");
 
-        // Derive session key and encapsulate ML-KEM
-        var (sessionKey, mlKemCiphertext) = negotiator.DeriveSessionKeyAsInitiator(responderHandshake);
-        _sessionKey = sessionKey;
+            var responderHandshake = HandshakeMessage.Deserialize(responderFrame.Payload);
 
-        // Send ML-KEM ciphertext
-        await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Handshake, mlKemCiphertext,
-            FrameFlags.HandshakeResponse, ct).ConfigureAwait(false);
+            // Negotiate version and capabilities
+            NegotiateProtocol(handshake, responderHandshake);
 
-        _engine = new ChunkedCryptoEngine(_sessionKey.AsReadOnlySpan(), 65536);
-        _isConnected = true;
-        StartHeartbeat();
+            // Derive session key and encapsulate ML-KEM
+            var (sessionKey, mlKemCiphertext) = negotiator.DeriveSessionKeyAsInitiator(responderHandshake);
+            _sessionKey = sessionKey;
+
+            // Send ML-KEM ciphertext
+            await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Handshake, mlKemCiphertext,
+                FrameFlags.HandshakeResponse, effectiveCt).ConfigureAwait(false);
+
+            _engine = new ChunkedCryptoEngine(_sessionKey.AsReadOnlySpan(), 65536);
+            DeriveFrameHmacKey();
+            _isConnected = true;
+            StartHeartbeat();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Handshake did not complete within {HandshakeTimeout.TotalSeconds:F0} seconds.");
+        }
     }
 
     /// <summary>
@@ -78,33 +109,69 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// </summary>
     internal async Task HandshakeAsResponderAsync(CancellationToken ct = default)
     {
-        using var negotiator = new SessionKeyNegotiator();
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (HandshakeTimeout > TimeSpan.Zero && HandshakeTimeout != Timeout.InfiniteTimeSpan)
+            timeoutCts.CancelAfter(HandshakeTimeout);
+        var effectiveCt = timeoutCts.Token;
 
-        // Receive initiator handshake
-        var initiatorFrame = await CyWireProtocol.ReadFrameAsync(_networkStream, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("Connection closed during handshake.");
-        if (initiatorFrame.Type != FrameType.Handshake)
-            throw new InvalidOperationException($"Expected Handshake frame, got {initiatorFrame.Type}.");
+        try
+        {
+            using var negotiator = new SessionKeyNegotiator();
 
-        var initiatorHandshake = HandshakeMessage.Deserialize(initiatorFrame.Payload);
+            // Receive initiator handshake
+            var initiatorFrame = await CyWireProtocol.ReadFrameAsync(_networkStream, effectiveCt).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Connection closed during handshake.");
+            if (initiatorFrame.Type != FrameType.Handshake)
+                throw new InvalidOperationException($"Expected Handshake frame, got {initiatorFrame.Type}.");
 
-        // Send our handshake
-        var handshake = negotiator.CreateHandshake();
-        var handshakeBytes = handshake.Serialize();
-        await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Handshake, handshakeBytes, ct: ct)
-            .ConfigureAwait(false);
+            var initiatorHandshake = HandshakeMessage.Deserialize(initiatorFrame.Payload);
 
-        // Receive ML-KEM ciphertext
-        var mlKemFrame = await CyWireProtocol.ReadFrameAsync(_networkStream, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("Connection closed during handshake.");
-        if (mlKemFrame.Type != FrameType.Handshake || (mlKemFrame.Flags & FrameFlags.HandshakeResponse) == 0)
-            throw new InvalidOperationException("Expected ML-KEM handshake response.");
+            // Send our V2 handshake with VersionedPayload flag
+            var handshake = negotiator.CreateHandshake();
+            var handshakeBytes = handshake.Serialize();
+            await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Handshake, handshakeBytes,
+                FrameFlags.VersionedPayload, effectiveCt).ConfigureAwait(false);
 
-        _sessionKey = negotiator.DeriveSessionKeyAsResponder(initiatorHandshake, mlKemFrame.Payload);
-        _engine = new ChunkedCryptoEngine(_sessionKey.AsReadOnlySpan(), 65536);
-        _isConnected = true;
-        StartHeartbeat();
+            // Negotiate version and capabilities
+            NegotiateProtocol(handshake, initiatorHandshake);
+
+            // Receive ML-KEM ciphertext
+            var mlKemFrame = await CyWireProtocol.ReadFrameAsync(_networkStream, effectiveCt).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Connection closed during handshake.");
+            if (mlKemFrame.Type != FrameType.Handshake || (mlKemFrame.Flags & FrameFlags.HandshakeResponse) == 0)
+                throw new InvalidOperationException("Expected ML-KEM handshake response.");
+
+            _sessionKey = negotiator.DeriveSessionKeyAsResponder(initiatorHandshake, mlKemFrame.Payload);
+            _engine = new ChunkedCryptoEngine(_sessionKey.AsReadOnlySpan(), 65536);
+            DeriveFrameHmacKey();
+            _isConnected = true;
+            StartHeartbeat();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Handshake did not complete within {HandshakeTimeout.TotalSeconds:F0} seconds.");
+        }
     }
+
+    private void NegotiateProtocol(HandshakeMessage ours, HandshakeMessage peer)
+    {
+        _negotiatedVersion = Math.Min(ours.Version, peer.Version);
+        _negotiatedCapabilities = ours.Capabilities & peer.Capabilities;
+    }
+
+    private void DeriveFrameHmacKey()
+    {
+        if ((_negotiatedCapabilities & ProtocolCapabilities.FrameHmac) == 0 || _sessionKey == null)
+            return;
+
+        var hmacKeyBytes = HkdfKeyDerivation.DeriveKey(
+            _sessionKey.AsReadOnlySpan(), outputLength: 32, info: FrameHmacInfo);
+        _frameHmacKey = new SecureBuffer(32);
+        _frameHmacKey.Write(hmacKeyBytes);
+        CryptographicOperations.ZeroMemory(hmacKeyBytes);
+    }
+
+    private bool UseFrameHmac => _frameHmacKey != null;
 
     /// <summary>Sends encrypted data to the peer.</summary>
     public async Task SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
@@ -113,8 +180,12 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
         if (!_isConnected) throw new InvalidOperationException("Handshake not completed.");
 
         var encrypted = _engine!.EncryptChunk(data.Span, _sendSequence++, false);
-        await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Data, encrypted, ct: ct)
-            .ConfigureAwait(false);
+        if (UseFrameHmac)
+            await CyWireProtocol.WriteAuthenticatedFrameAsync(_networkStream, FrameType.Data, encrypted,
+                _frameHmacKey!.AsReadOnlySpan(), ct: ct).ConfigureAwait(false);
+        else
+            await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Data, encrypted, ct: ct)
+                .ConfigureAwait(false);
     }
 
     /// <summary>Receives and decrypts data from the peer.</summary>
@@ -128,7 +199,9 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
         if (ReceiveTimeout > TimeSpan.Zero)
             timeoutCts.CancelAfter(ReceiveTimeout);
 
-        var frame = await CyWireProtocol.ReadFrameAsync(_networkStream, timeoutCts.Token).ConfigureAwait(false);
+        var frame = UseFrameHmac
+            ? await CyWireProtocol.ReadAuthenticatedFrameAsync(_networkStream, _frameHmacKey!.AsReadOnlySpan(), timeoutCts.Token).ConfigureAwait(false)
+            : await CyWireProtocol.ReadFrameAsync(_networkStream, timeoutCts.Token).ConfigureAwait(false);
         if (frame == null) return null;
 
         return frame.Type switch
@@ -147,8 +220,12 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
 
         try
         {
-            await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Close, ReadOnlyMemory<byte>.Empty, ct: ct)
-                .ConfigureAwait(false);
+            if (UseFrameHmac)
+                await CyWireProtocol.WriteAuthenticatedFrameAsync(_networkStream, FrameType.Close,
+                    ReadOnlyMemory<byte>.Empty, _frameHmacKey!.AsReadOnlySpan(), ct: ct).ConfigureAwait(false);
+            else
+                await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Close,
+                    ReadOnlyMemory<byte>.Empty, ct: ct).ConfigureAwait(false);
         }
         catch (IOException) { /* Connection may already be closed */ }
         catch (ObjectDisposedException) { }
@@ -163,8 +240,12 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
             if (Volatile.Read(ref _isDisposed) == 1 || !_isConnected) return;
             try
             {
-                await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Heartbeat,
-                    ReadOnlyMemory<byte>.Empty).ConfigureAwait(false);
+                if (UseFrameHmac)
+                    await CyWireProtocol.WriteAuthenticatedFrameAsync(_networkStream, FrameType.Heartbeat,
+                        ReadOnlyMemory<byte>.Empty, _frameHmacKey!.AsReadOnlySpan()).ConfigureAwait(false);
+                else
+                    await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Heartbeat,
+                        ReadOnlyMemory<byte>.Empty).ConfigureAwait(false);
             }
             catch { /* Ignore heartbeat failures */ }
         }, null, HeartbeatInterval, HeartbeatInterval);
@@ -177,6 +258,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
 
         _heartbeatTimer?.Dispose();
         _engine?.Dispose();
+        _frameHmacKey?.Dispose();
         _sessionKey?.Dispose();
         _networkStream.Dispose();
         _tcpClient.Dispose();
@@ -190,6 +272,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
         if (_heartbeatTimer != null)
             await _heartbeatTimer.DisposeAsync().ConfigureAwait(false);
         _engine?.Dispose();
+        _frameHmacKey?.Dispose();
         _sessionKey?.Dispose();
         await _networkStream.DisposeAsync().ConfigureAwait(false);
         _tcpClient.Dispose();

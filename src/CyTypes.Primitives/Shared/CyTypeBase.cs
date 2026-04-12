@@ -51,7 +51,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         _cryptoEngine = cryptoEngine ?? new AesGcmEngine();
         _keyManager = new KeyManager();
         _isFheMode = Policy.Arithmetic is ArithmeticMode.HomomorphicBasic or ArithmeticMode.HomomorphicFull;
-        Security = new SecurityContext(InstanceId, Policy.MaxDecryptionCount, Policy.DecryptionRateLimit);
+        Security = new SecurityContext(InstanceId, Policy.MaxDecryptionCount, Policy.DecryptionRateLimit, Policy.DecryptionRateLimitWindow);
 
         Security.AutoDestroyTriggered += OnAutoDestroy;
         Security.TaintCleared += OnTaintCleared;
@@ -69,7 +69,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         _cryptoEngine = new AesGcmEngine();
         _keyManager = new KeyManager();
         _isFheMode = true;
-        Security = new SecurityContext(InstanceId, Policy.MaxDecryptionCount, Policy.DecryptionRateLimit);
+        Security = new SecurityContext(InstanceId, Policy.MaxDecryptionCount, Policy.DecryptionRateLimit, Policy.DecryptionRateLimitWindow);
 
         Security.AutoDestroyTriggered += OnAutoDestroy;
         Security.TaintCleared += OnTaintCleared;
