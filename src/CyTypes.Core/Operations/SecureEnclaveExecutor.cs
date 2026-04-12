@@ -6,16 +6,18 @@ using CyTypes.Core.Crypto.Interfaces;
 namespace CyTypes.Core.Operations;
 
 /// <summary>
-/// Executes arithmetic and comparison operations by decrypting operands in a secure enclave, performing the operation in plaintext, and re-encrypting the result.
+/// Executes arithmetic and comparison operations by decrypting operands in a protected
+/// software context, performing the operation in plaintext, and re-encrypting the result.
+/// Note: this operates entirely in user-space memory, not in a hardware secure enclave.
 /// </summary>
-public sealed class SecureEnclaveExecutor
+public sealed class SoftwareOperationExecutor
 {
     private readonly ICryptoEngine _cryptoEngine;
     private readonly ISecureSerializer _serializer;
 
     /// <summary>Initializes a new executor with the specified crypto engine and the default binary serializer.</summary>
     /// <param name="cryptoEngine">The cryptographic engine used for encrypt/decrypt operations.</param>
-    public SecureEnclaveExecutor(ICryptoEngine cryptoEngine)
+    public SoftwareOperationExecutor(ICryptoEngine cryptoEngine)
         : this(cryptoEngine, new BinarySerializer())
     {
     }
@@ -23,7 +25,7 @@ public sealed class SecureEnclaveExecutor
     /// <summary>Initializes a new executor with the specified crypto engine and serializer.</summary>
     /// <param name="cryptoEngine">The cryptographic engine used for encrypt/decrypt operations.</param>
     /// <param name="serializer">The serializer used to convert between typed values and byte arrays.</param>
-    public SecureEnclaveExecutor(ICryptoEngine cryptoEngine, ISecureSerializer serializer)
+    public SoftwareOperationExecutor(ICryptoEngine cryptoEngine, ISecureSerializer serializer)
     {
         _cryptoEngine = cryptoEngine ?? throw new ArgumentNullException(nameof(cryptoEngine));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));

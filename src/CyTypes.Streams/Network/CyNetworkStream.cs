@@ -20,7 +20,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     private SecureBuffer? _sessionKey;
     private long _sendSequence;
     private long _receiveSequence;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
     private bool _isConnected;
     private Timer? _heartbeatTimer;
 
@@ -109,7 +109,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// <summary>Sends encrypted data to the peer.</summary>
     public async Task SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         if (!_isConnected) throw new InvalidOperationException("Handshake not completed.");
 
         var encrypted = _engine!.EncryptChunk(data.Span, _sendSequence++, false);
@@ -121,7 +121,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// <returns>The decrypted data, or <c>null</c> if the connection was closed.</returns>
     public async Task<byte[]?> ReceiveAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         if (!_isConnected) throw new InvalidOperationException("Handshake not completed.");
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -143,7 +143,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// <summary>Sends a graceful close frame.</summary>
     public async Task CloseAsync(CancellationToken ct = default)
     {
-        if (_isDisposed || !_isConnected) return;
+        if (Volatile.Read(ref _isDisposed) == 1 || !_isConnected) return;
 
         try
         {
@@ -160,7 +160,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
 
         _heartbeatTimer = new Timer(async _ =>
         {
-            if (_isDisposed || !_isConnected) return;
+            if (Volatile.Read(ref _isDisposed) == 1 || !_isConnected) return;
             try
             {
                 await CyWireProtocol.WriteFrameAsync(_networkStream, FrameType.Heartbeat,
@@ -173,8 +173,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _heartbeatTimer?.Dispose();
         _engine?.Dispose();
@@ -186,8 +185,7 @@ public sealed class CyNetworkStream : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         if (_heartbeatTimer != null)
             await _heartbeatTimer.DisposeAsync().ConfigureAwait(false);

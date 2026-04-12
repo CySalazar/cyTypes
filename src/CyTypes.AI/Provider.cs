@@ -123,7 +123,12 @@ public sealed class AnthropicProvider : IAIProvider
         var outTok = doc.RootElement.GetProperty("usage").GetProperty("output_tokens").GetInt32();
         return new ProviderCallResult { Text = text, InputTokens = inTok, OutputTokens = outTok, EstimatedCost = (inTok * 3m + outTok * 15m) / 1_000_000m };
     }
-    private static string Truncate(string s) => s.Length > 200 ? s[..200] : s;
+    private static string Truncate(string s) => s.Length > 200 ? s[..200] + "..." : s;
+}
+
+internal static class ProviderHelpers
+{
+    internal static string Truncate(string s) => s.Length > 200 ? s[..200] + "..." : s;
 }
 
 public sealed class OpenAIProvider : IAIProvider
@@ -178,7 +183,7 @@ public sealed class OllamaProvider : IAIProvider
         var resp = await http.PostAsJsonAsync($"{_o.Endpoint}/api/chat",
             new { model = _o.Model, messages = wire, stream = false }, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode) throw new HttpRequestException($"Ollama {(int)resp.StatusCode}: {body}");
+        if (!resp.IsSuccessStatusCode) throw new HttpRequestException($"Ollama {(int)resp.StatusCode}: {ProviderHelpers.Truncate(body)}");
         using var doc = JsonDocument.Parse(body);
         var text = doc.RootElement.GetProperty("message").GetProperty("content").GetString() ?? "";
         int approxIn = 0;
@@ -204,7 +209,7 @@ public sealed class GoogleProvider : IAIProvider
     {
         if (string.IsNullOrEmpty(_o.ApiKey)) throw new InvalidOperationException("Google API key missing");
         var http = HttpFactory.Get(_o);
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_o.Model}:generateContent?key={_o.ApiKey}";
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_o.Model}:generateContent";
 
         // Google uses roles "user" and "model" (not "assistant"). Normalize.
         var contents = new List<object>(messages.Count);
@@ -222,9 +227,14 @@ public sealed class GoogleProvider : IAIProvider
             ? new { contents, systemInstruction = new { parts = new[] { new { text = systemPrompt } } } }
             : (object)new { contents };
 
-        var resp = await http.PostAsJsonAsync(url, payload, ct);
+        // SECURITY: API key passed via header instead of URL query string to prevent
+        // leakage in HTTP logs, proxy caches, and error messages.
+        var req = new HttpRequestMessage(HttpMethod.Post, url);
+        req.Headers.Add("x-goog-api-key", _o.ApiKey);
+        req.Content = JsonContent.Create(payload);
+        using var resp = await http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode) throw new HttpRequestException($"Google {(int)resp.StatusCode}: {body}");
+        if (!resp.IsSuccessStatusCode) throw new HttpRequestException($"Google {(int)resp.StatusCode}: {ProviderHelpers.Truncate(body)}");
         using var doc = JsonDocument.Parse(body);
         var text = doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "";
         int approxIn = 0;
@@ -265,7 +275,7 @@ internal static class OpenAICompat
         });
         using var resp = await http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode) throw new HttpRequestException($"{label} {(int)resp.StatusCode}: {body}");
+        if (!resp.IsSuccessStatusCode) throw new HttpRequestException($"{label} {(int)resp.StatusCode}: {ProviderHelpers.Truncate(body)}");
         using var doc = JsonDocument.Parse(body);
         var text = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
         int inTok = 0, outTok = 0;

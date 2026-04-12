@@ -17,7 +17,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     private SecureBuffer? _encryptedData;
     private readonly KeyManager _keyManager;
     private readonly ICryptoEngine _cryptoEngine;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
     private readonly bool _isFheMode;
 
     /// <summary>Gets the security context tracking compromise and taint state.</summary>
@@ -29,7 +29,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <summary>Gets the UTC timestamp when this instance was created.</summary>
     public DateTime CreatedUtc { get; }
     /// <summary>Gets a value indicating whether this instance has been disposed.</summary>
-    public bool IsDisposed => _isDisposed;
+    public bool IsDisposed => Volatile.Read(ref _isDisposed) == 1;
     /// <summary>Gets a value indicating whether this instance has been compromised.</summary>
     public bool IsCompromised => Security.IsCompromised;
     /// <summary>Gets a value indicating whether this instance has been tainted.</summary>
@@ -105,7 +105,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <summary>Encrypts the specified value and stores it in a secure buffer.</summary>
     protected void EncryptValue(TNative value)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         if (_isFheMode)
         {
@@ -141,12 +141,20 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         try
         {
             var ciphertext = _cryptoEngine.Encrypt(plaintext, _keyManager.CurrentKey);
-            var newBuffer = new SecureBuffer(ciphertext.Length);
-            newBuffer.Write(ciphertext);
+            try
+            {
+                var newBuffer = new SecureBuffer(ciphertext.Length);
+                newBuffer.Write(ciphertext);
 
-            var old = _encryptedData;
-            _encryptedData = newBuffer;
-            old?.Dispose();
+                var old = _encryptedData;
+                _encryptedData = newBuffer;
+                old?.Dispose();
+            }
+            finally
+            {
+                // SECURITY: Zero ciphertext copy after writing to SecureBuffer
+                CryptographicOperations.ZeroMemory(ciphertext);
+            }
         }
         finally
         {
@@ -157,7 +165,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <summary>Decrypts and returns the stored value, incrementing the decryption counter.</summary>
     protected TNative DecryptValue()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         if (_encryptedData == null)
             throw new InvalidOperationException("No encrypted data available.");
@@ -290,7 +298,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <exception cref="ObjectDisposedException">This instance has been disposed.</exception>
     public void RotateKeyAndReEncrypt()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         if (_isFheMode)
             throw new NotSupportedException("Key rotation is not supported for FHE-encrypted values.");
@@ -326,7 +334,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <exception cref="ObjectDisposedException">This instance has been disposed.</exception>
     public void ReEncryptWithCurrentKey()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         var value = DecryptValue();
         try
         {
@@ -341,7 +349,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
 
     internal byte[] GetEncryptedBytes()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         return _encryptedData?.ToArray() ?? throw new InvalidOperationException("No encrypted data.");
     }
 
@@ -354,7 +362,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <exception cref="ObjectDisposedException">This instance has been disposed.</exception>
     public virtual TSelf Clone()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         var encBytes = GetEncryptedBytes();
         var clonedKey = _keyManager.Clone();
         return CreateClone(encBytes, Policy, clonedKey);
@@ -372,7 +380,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// </summary>
     public byte[] ToSecureBytes()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         var ciphertext = GetEncryptedBytes();
         try
@@ -413,7 +421,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     public void ElevatePolicy(SecurityPolicy higher)
     {
         ArgumentNullException.ThrowIfNull(higher);
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         // SECURITY: Only allow promotion — demotion is a separate path via WithPolicy
         if (IsDemotion(Policy, higher))
@@ -436,7 +444,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     public void ApplyPolicy(SecurityPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         if (IsDemotion(Policy, policy))
         {
@@ -515,9 +523,18 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
         {
             MarkCompromised();
             var value = DecryptValue();
-            if (value is IFormattable formattable)
-                return formattable.ToString(format, formatProvider);
-            return value?.ToString() ?? string.Empty;
+            try
+            {
+                if (value is IFormattable formattable)
+                    return formattable.ToString(format, formatProvider);
+                return value?.ToString() ?? string.Empty;
+            }
+            finally
+            {
+                // SECURITY: Zero byte arrays to prevent plaintext lingering in memory
+                if (value is byte[] bytes)
+                    CryptographicOperations.ZeroMemory(bytes);
+            }
         }
         return ToString();
     }
@@ -529,7 +546,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <param name="writer">The stream writer to write to.</param>
     public void WriteTo(object writer)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         // Uses dynamic dispatch to avoid CyTypes.Streams dependency in Primitives.
         // The writer must have a WriteValue<TSelf, TNative>(CyTypeBase<TSelf, TNative>) method.
         var writeMethod = writer.GetType().GetMethod("WriteValue");
@@ -562,8 +579,7 @@ public abstract class CyTypeBase<TSelf, TNative> : ICyType, IFormattable
     /// <summary>Releases managed resources. SecureBuffer handles its own finalization independently.</summary>
     protected virtual void Dispose(bool disposing)
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _encryptedData?.Dispose();
         _keyManager.Dispose();

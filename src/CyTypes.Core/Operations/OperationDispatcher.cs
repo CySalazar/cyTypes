@@ -12,7 +12,7 @@ namespace CyTypes.Core.Operations;
 /// </summary>
 public sealed class OperationDispatcher
 {
-    private readonly SecureEnclaveExecutor _enclaveExecutor;
+    private readonly SoftwareOperationExecutor _enclaveExecutor;
     private readonly SecurityAuditor _auditor;
     private readonly IFheEngine? _fheEngine;
 
@@ -22,7 +22,7 @@ public sealed class OperationDispatcher
         SecurityAuditor auditor,
         IFheEngine? fheEngine = null)
     {
-        _enclaveExecutor = new SecureEnclaveExecutor(cryptoEngine);
+        _enclaveExecutor = new SoftwareOperationExecutor(cryptoEngine);
         _auditor = auditor ?? throw new ArgumentNullException(nameof(auditor));
         _fheEngine = fheEngine;
     }

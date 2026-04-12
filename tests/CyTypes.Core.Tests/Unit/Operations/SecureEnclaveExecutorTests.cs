@@ -7,17 +7,17 @@ using Xunit;
 
 namespace CyTypes.Core.Tests.Unit.Operations;
 
-public sealed class SecureEnclaveExecutorTests
+public sealed class SoftwareOperationExecutorTests
 {
     private readonly ICryptoEngine _engine = new AesGcmEngine();
     private readonly byte[] _key;
-    private readonly SecureEnclaveExecutor _executor;
+    private readonly SoftwareOperationExecutor _executor;
 
-    public SecureEnclaveExecutorTests()
+    public SoftwareOperationExecutorTests()
     {
         _key = new byte[32];
         RandomNumberGenerator.Fill(_key);
-        _executor = new SecureEnclaveExecutor(_engine);
+        _executor = new SoftwareOperationExecutor(_engine);
     }
 
     private byte[] EncryptInt(int value) => _engine.Encrypt(BitConverter.GetBytes(value), _key);

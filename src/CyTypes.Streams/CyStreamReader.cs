@@ -10,7 +10,7 @@ public sealed class CyStreamReader : IDisposable
 {
     private readonly CyStream _stream;
     private readonly bool _leaveOpen;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
 
     /// <summary>
     /// Initializes a new <see cref="CyStreamReader"/> that reads from the given <see cref="CyStream"/>.
@@ -29,7 +29,7 @@ public sealed class CyStreamReader : IDisposable
     /// <returns>The type ID and encrypted payload, or <c>null</c> if the stream is exhausted.</returns>
     public (ushort TypeId, byte[] EncryptedPayload)? ReadNext()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         // Read frame header
         var header = new byte[6];
@@ -81,8 +81,7 @@ public sealed class CyStreamReader : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         if (!_leaveOpen)
             _stream.Dispose();

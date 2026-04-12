@@ -12,7 +12,9 @@ public sealed class NoiseBudgetTracker
     private readonly int _minimumBudget;
     private int _initialBudget;
 
-    /// <summary>Raised when the noise budget drops below 20% of the initial budget.</summary>
+    private readonly double _warningThreshold;
+
+    /// <summary>Raised when the noise budget drops below the warning threshold of the initial budget.</summary>
     public event Action<int, int>? BudgetLow;
 
     /// <summary>
@@ -20,10 +22,14 @@ public sealed class NoiseBudgetTracker
     /// </summary>
     /// <param name="engine">The FHE engine to query noise budget from.</param>
     /// <param name="minimumBudget">The minimum acceptable noise budget in bits (default: 1).</param>
-    public NoiseBudgetTracker(IFheEngine engine, int minimumBudget = 1)
+    /// <param name="warningThreshold">The fraction of initial budget below which a warning is raised (default: 0.2 = 20%).</param>
+    public NoiseBudgetTracker(IFheEngine engine, int minimumBudget = 1, double warningThreshold = 0.2)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _minimumBudget = minimumBudget;
+        if (warningThreshold is <= 0.0 or >= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(warningThreshold), "Must be between 0 and 1 exclusive.");
+        _warningThreshold = warningThreshold;
     }
 
     /// <summary>
@@ -47,7 +53,7 @@ public sealed class NoiseBudgetTracker
         if (budget <= _minimumBudget)
             throw new NoiseBudgetExhaustedException(budget, _minimumBudget);
 
-        if (_initialBudget > 0 && budget < _initialBudget * 0.2)
+        if (_initialBudget > 0 && budget < _initialBudget * _warningThreshold)
             BudgetLow?.Invoke(budget, _initialBudget);
 
         return budget;

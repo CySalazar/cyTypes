@@ -31,13 +31,13 @@ public static class SafeUrlValidator
     public static void EnsureSafe(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            throw new InvalidOperationException($"URL '{url}' is not a valid absolute URI");
+            throw new InvalidOperationException("URL is not a valid absolute URI.");
         if (uri.Scheme != Uri.UriSchemeHttps)
-            throw new InvalidOperationException($"URL '{url}' must use https");
+            throw new InvalidOperationException("URL must use https.");
+        // SECURITY: Redact hostname from error messages to prevent information disclosure
         if (!AllowedHosts.Contains(uri.Host))
             throw new InvalidOperationException(
-                $"URL host '{uri.Host}' is not in the allow-list. " +
-                $"Allowed: {string.Join(", ", AllowedHosts)}");
+                $"URL host is not in the allow-list. Allowed: {string.Join(", ", AllowedHosts)}");
 
         // Resolve and reject private / loopback / link-local addresses to
         // defend against DNS rebinding and the case where an attacker controls
@@ -46,13 +46,13 @@ public static class SafeUrlValidator
         try { addresses = Dns.GetHostAddresses(uri.Host); }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Could not resolve '{uri.Host}': {ex.Message}");
+            throw new InvalidOperationException($"Could not resolve URL host: {ex.Message}");
         }
         foreach (var addr in addresses)
         {
             if (IsPrivate(addr))
                 throw new InvalidOperationException(
-                    $"URL host '{uri.Host}' resolves to a private/loopback IP ({addr}); refusing");
+                    "URL host resolves to a private/loopback IP; refusing.");
         }
     }
 

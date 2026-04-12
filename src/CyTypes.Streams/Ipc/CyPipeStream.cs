@@ -18,7 +18,7 @@ public sealed class CyPipeStream : IDisposable, IAsyncDisposable
     private SecureBuffer? _sessionKey;
     private long _sendSequence;
     private long _receiveSequence;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
     private bool _isConnected;
 
     internal CyPipeStream(PipeStream pipeStream)
@@ -98,7 +98,7 @@ public sealed class CyPipeStream : IDisposable, IAsyncDisposable
     /// <summary>Sends encrypted data to the peer.</summary>
     public async Task SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         if (!_isConnected) throw new InvalidOperationException("Handshake not completed.");
 
         var encrypted = _engine!.EncryptChunk(data.Span, _sendSequence++, false);
@@ -110,7 +110,7 @@ public sealed class CyPipeStream : IDisposable, IAsyncDisposable
     /// <returns>The decrypted data, or <c>null</c> if the connection was closed.</returns>
     public async Task<byte[]?> ReceiveAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         if (!_isConnected) throw new InvalidOperationException("Handshake not completed.");
 
         var frame = await CyWireProtocol.ReadFrameAsync(_pipeStream, ct).ConfigureAwait(false);
@@ -128,7 +128,7 @@ public sealed class CyPipeStream : IDisposable, IAsyncDisposable
     /// <summary>Sends a graceful close frame.</summary>
     public async Task CloseAsync(CancellationToken ct = default)
     {
-        if (_isDisposed || !_isConnected) return;
+        if (Volatile.Read(ref _isDisposed) == 1 || !_isConnected) return;
         await CyWireProtocol.WriteFrameAsync(_pipeStream, FrameType.Close, ReadOnlyMemory<byte>.Empty, ct: ct)
             .ConfigureAwait(false);
     }
@@ -136,8 +136,7 @@ public sealed class CyPipeStream : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _engine?.Dispose();
         _sessionKey?.Dispose();
@@ -147,8 +146,7 @@ public sealed class CyPipeStream : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _engine?.Dispose();
         _sessionKey?.Dispose();

@@ -17,7 +17,7 @@ public sealed class CyFileStream : IDisposable, IAsyncDisposable
     private readonly string? _tempPath;
     private readonly string? _finalPath;
     private readonly SecureBuffer? _derivedKey;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
 
     private CyFileStream(CyStream cyStream, string? tempPath, string? finalPath, SecureBuffer? derivedKey)
     {
@@ -121,14 +121,14 @@ public sealed class CyFileStream : IDisposable, IAsyncDisposable
     /// <summary>Writes data to the encrypted file.</summary>
     public void Write(ReadOnlySpan<byte> data)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         _cyStream.Write(data.ToArray(), 0, data.Length);
     }
 
     /// <summary>Reads data from the encrypted file.</summary>
     public int Read(Span<byte> buffer)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         var tempBuf = new byte[buffer.Length];
         var read = _cyStream.Read(tempBuf, 0, tempBuf.Length);
         tempBuf.AsSpan(0, read).CopyTo(buffer);
@@ -156,8 +156,7 @@ public sealed class CyFileStream : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _cyStream.Dispose();
         _derivedKey?.Dispose();
@@ -172,8 +171,7 @@ public sealed class CyFileStream : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         await _cyStream.DisposeAsync().ConfigureAwait(false);
         _derivedKey?.Dispose();

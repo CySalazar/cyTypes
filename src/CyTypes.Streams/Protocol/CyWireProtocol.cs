@@ -61,6 +61,8 @@ public static class CyWireProtocol
             throw new InvalidDataException("Incomplete frame header.");
 
         var type = (FrameType)header[0];
+        if (!Enum.IsDefined(type))
+            throw new InvalidDataException($"Unknown frame type: 0x{header[0]:X2}.");
         var flags = (FrameFlags)header[1];
         var payloadLength = BinaryPrimitives.ReadInt32BigEndian(header[2..]);
 
@@ -95,6 +97,8 @@ public static class CyWireProtocol
             throw new InvalidDataException("Incomplete frame header.");
 
         var type = (FrameType)header[0];
+        if (!Enum.IsDefined(type))
+            throw new InvalidDataException($"Unknown frame type: 0x{header[0]:X2}.");
         var flags = (FrameFlags)header[1];
         var payloadLength = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(2));
 
