@@ -44,6 +44,9 @@ public sealed class SecurityPolicy
     /// <summary>Gets the maximum number of decryptions allowed per second, or <c>null</c> if unlimited.</summary>
     public int? DecryptionRateLimit { get; }
 
+    /// <summary>Gets the sliding window duration for rate limiting. Defaults to 1 second.</summary>
+    public TimeSpan DecryptionRateLimitWindow { get; }
+
     /// <summary>Gets the minimum required key store capability level.</summary>
     public KeyStoreCapability KeyStoreMinimumCapability { get; }
 
@@ -84,7 +87,8 @@ public sealed class SecurityPolicy
         bool requireKeyExchange = true,
         StreamIntegrityMode streamIntegrity = StreamIntegrityMode.PerChunkPlusFooter,
         FormattingMode formatting = FormattingMode.Redacted,
-        CharAccessMode charAccess = CharAccessMode.CompromiseOnAccess)
+        CharAccessMode charAccess = CharAccessMode.CompromiseOnAccess,
+        TimeSpan? decryptionRateLimitWindow = null)
     {
         Name = name;
         Arithmetic = arithmetic;
@@ -98,6 +102,7 @@ public sealed class SecurityPolicy
         AutoDestroy = autoDestroy;
         AllowDemotion = allowDemotion;
         DecryptionRateLimit = decryptionRateLimit;
+        DecryptionRateLimitWindow = decryptionRateLimitWindow ?? TimeSpan.FromSeconds(1);
         KeyStoreMinimumCapability = keyStoreMinimumCapability;
         Overflow = overflow;
         StreamChunkSize = streamChunkSize;

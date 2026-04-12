@@ -186,34 +186,69 @@ public sealed class SessionKeyNegotiator : IDisposable
     }
 }
 
+/// <summary>Wire protocol version constants.</summary>
+public static class ProtocolVersion
+{
+    /// <summary>Legacy handshake without version field.</summary>
+    public const byte Legacy = 0;
+    /// <summary>V2: adds version byte, capabilities bitmap, and frame HMAC support.</summary>
+    public const byte V2 = 1;
+    /// <summary>The current protocol version used by this build.</summary>
+    public const byte Current = V2;
+    /// <summary>First-byte values >= this threshold indicate a legacy (unversioned) handshake.</summary>
+    internal const byte LegacyDetectionThreshold = 0x20;
+}
+
+/// <summary>Capabilities bitmap negotiated during handshake.</summary>
+[Flags]
+public enum ProtocolCapabilities : ushort
+{
+    /// <summary>No additional capabilities.</summary>
+    None = 0,
+    /// <summary>Supports HMAC-SHA256 frame authentication post-handshake.</summary>
+    FrameHmac = 1,
+}
+
 /// <summary>
-/// Contains the public keys exchanged during a handshake.
+/// Contains the public keys and protocol metadata exchanged during a handshake.
 /// </summary>
-/// <param name="EcdhPublicKey">The ECDH P-256 public key (SubjectPublicKeyInfo DER).</param>
-/// <param name="MlKemPublicKey">The ML-KEM-1024 public key.</param>
-public sealed record HandshakeMessage(byte[] EcdhPublicKey, byte[] MlKemPublicKey)
+public sealed record HandshakeMessage(
+    byte[] EcdhPublicKey,
+    byte[] MlKemPublicKey,
+    byte Version = ProtocolVersion.Current,
+    ProtocolCapabilities Capabilities = ProtocolCapabilities.FrameHmac)
 {
     /// <summary>
-    /// Serializes the handshake message to bytes.
-    /// Layout: [ecdhKeyLen:4][ecdhKey:N][mlKemKey:M]
+    /// Serializes the handshake message.
+    /// V2 layout: [version:1][capabilities:2][ecdhKeyLen:4][ecdhKey:N][mlKemKey:M]
     /// </summary>
     public byte[] Serialize()
     {
-        var output = new byte[4 + EcdhPublicKey.Length + MlKemPublicKey.Length];
-        BitConverter.TryWriteBytes(output.AsSpan(0, 4), EcdhPublicKey.Length);
-        EcdhPublicKey.CopyTo(output, 4);
-        MlKemPublicKey.CopyTo(output, 4 + EcdhPublicKey.Length);
+        var output = new byte[1 + 2 + 4 + EcdhPublicKey.Length + MlKemPublicKey.Length];
+        output[0] = Version;
+        BinaryPrimitives.WriteUInt16LittleEndian(output.AsSpan(1, 2), (ushort)Capabilities);
+        BinaryPrimitives.WriteInt32LittleEndian(output.AsSpan(3, 4), EcdhPublicKey.Length);
+        EcdhPublicKey.CopyTo(output, 7);
+        MlKemPublicKey.CopyTo(output, 7 + EcdhPublicKey.Length);
         return output;
     }
 
-    /// <summary>Deserializes a handshake message from bytes.</summary>
+    /// <summary>Deserializes a handshake message, auto-detecting legacy vs versioned format.</summary>
     public static HandshakeMessage Deserialize(ReadOnlySpan<byte> data)
     {
         if (data.Length < 4)
             throw new ArgumentException("Handshake data is too short.", nameof(data));
 
+        // Detect legacy format: first byte >= 0x20 means it's the low byte of LE ecdhKeyLen
+        if (data[0] >= ProtocolVersion.LegacyDetectionThreshold)
+            return DeserializeLegacy(data);
+
+        return DeserializeVersioned(data);
+    }
+
+    private static HandshakeMessage DeserializeLegacy(ReadOnlySpan<byte> data)
+    {
         var ecdhLen = BitConverter.ToInt32(data[..4]);
-        // SECURITY: Validate ECDH key length bounds (P-256 SubjectPublicKeyInfo is ~91 bytes)
         if (ecdhLen < 32 || ecdhLen > 256)
             throw new ArgumentException($"ECDH public key length {ecdhLen} is outside valid range [32, 256].", nameof(data));
         if (data.Length < 4 + ecdhLen)
@@ -221,11 +256,33 @@ public sealed record HandshakeMessage(byte[] EcdhPublicKey, byte[] MlKemPublicKe
 
         var ecdhKey = data.Slice(4, ecdhLen).ToArray();
         var mlKemKeyLen = data.Length - 4 - ecdhLen;
-        // SECURITY: Validate ML-KEM key length bounds (ML-KEM-768=1184, ML-KEM-1024=1568)
         if (mlKemKeyLen < 1184 || mlKemKeyLen > 1700)
             throw new ArgumentException($"ML-KEM public key length {mlKemKeyLen} is outside valid range [1184, 1700].", nameof(data));
         var mlKemKey = data[(4 + ecdhLen)..].ToArray();
 
-        return new HandshakeMessage(ecdhKey, mlKemKey);
+        return new HandshakeMessage(ecdhKey, mlKemKey, ProtocolVersion.Legacy, ProtocolCapabilities.None);
+    }
+
+    private static HandshakeMessage DeserializeVersioned(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 7)
+            throw new ArgumentException("Versioned handshake data is too short.", nameof(data));
+
+        var version = data[0];
+        var capabilities = (ProtocolCapabilities)BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(1, 2));
+        var ecdhLen = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(3, 4));
+
+        if (ecdhLen < 32 || ecdhLen > 256)
+            throw new ArgumentException($"ECDH public key length {ecdhLen} is outside valid range [32, 256].", nameof(data));
+        if (data.Length < 7 + ecdhLen)
+            throw new ArgumentException("Versioned handshake data is truncated.", nameof(data));
+
+        var ecdhKey = data.Slice(7, ecdhLen).ToArray();
+        var mlKemKeyLen = data.Length - 7 - ecdhLen;
+        if (mlKemKeyLen < 1184 || mlKemKeyLen > 1700)
+            throw new ArgumentException($"ML-KEM public key length {mlKemKeyLen} is outside valid range [1184, 1700].", nameof(data));
+        var mlKemKey = data[(7 + ecdhLen)..].ToArray();
+
+        return new HandshakeMessage(ecdhKey, mlKemKey, version, capabilities);
     }
 }

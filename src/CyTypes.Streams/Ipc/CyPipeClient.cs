@@ -11,6 +11,9 @@ public sealed class CyPipeClient : IDisposable
     private CyPipeStream? _pipeStream;
     private bool _isDisposed;
 
+    /// <summary>Gets or sets the maximum duration allowed for the handshake phase. Defaults to 30 seconds.</summary>
+    public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>Gets the underlying <see cref="CyPipeStream"/> after connection.</summary>
     public CyPipeStream Stream => _pipeStream ?? throw new InvalidOperationException("Not connected.");
 
@@ -38,6 +41,7 @@ public sealed class CyPipeClient : IDisposable
         await clientPipe.ConnectAsync(timeout, ct).ConfigureAwait(false);
 
         _pipeStream = new CyPipeStream(clientPipe);
+        _pipeStream.HandshakeTimeout = HandshakeTimeout;
         await _pipeStream.HandshakeAsInitiatorAsync(ct).ConfigureAwait(false);
     }
 

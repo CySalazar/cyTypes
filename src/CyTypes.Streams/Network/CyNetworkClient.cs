@@ -12,6 +12,9 @@ public sealed class CyNetworkClient : IDisposable, IAsyncDisposable
     private CyNetworkStream? _networkStream;
     private bool _isDisposed;
 
+    /// <summary>Gets or sets the maximum duration allowed for the handshake phase. Defaults to 30 seconds.</summary>
+    public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>Gets the underlying <see cref="CyNetworkStream"/> after connection.</summary>
     public CyNetworkStream Stream => _networkStream ?? throw new InvalidOperationException("Not connected.");
 
@@ -28,6 +31,7 @@ public sealed class CyNetworkClient : IDisposable, IAsyncDisposable
         await tcpClient.ConnectAsync(endpoint, ct).ConfigureAwait(false);
 
         _networkStream = new CyNetworkStream(tcpClient);
+        _networkStream.HandshakeTimeout = HandshakeTimeout;
         await _networkStream.HandshakeAsInitiatorAsync(ct).ConfigureAwait(false);
     }
 
@@ -45,6 +49,7 @@ public sealed class CyNetworkClient : IDisposable, IAsyncDisposable
         await tcpClient.ConnectAsync(host, port, ct).ConfigureAwait(false);
 
         _networkStream = new CyNetworkStream(tcpClient);
+        _networkStream.HandshakeTimeout = HandshakeTimeout;
         await _networkStream.HandshakeAsInitiatorAsync(ct).ConfigureAwait(false);
     }
 

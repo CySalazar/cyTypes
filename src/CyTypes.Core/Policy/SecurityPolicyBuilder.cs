@@ -20,6 +20,7 @@ public sealed class SecurityPolicyBuilder
     private bool _autoDestroy;
     private bool _allowDemotion;
     private int? _decryptionRateLimit;
+    private TimeSpan? _decryptionRateLimitWindow;
     private KeyStoreCapability _keyStoreMinimumCapability = KeyStoreCapability.InMemoryOnly;
     private OverflowMode _overflow = OverflowMode.Unchecked;
 
@@ -77,6 +78,16 @@ public sealed class SecurityPolicyBuilder
         return this;
     }
 
+    /// <summary>Sets the sliding window duration for rate limiting (default 1 second).</summary>
+    public SecurityPolicyBuilder WithDecryptionRateLimitWindow(TimeSpan window)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(window, TimeSpan.Zero);
+        if (window > TimeSpan.FromMinutes(5))
+            throw new ArgumentOutOfRangeException(nameof(window), "Rate limit window must not exceed 5 minutes.");
+        _decryptionRateLimitWindow = window;
+        return this;
+    }
+
     /// <summary>Sets the minimum required key store capability level.</summary>
     public SecurityPolicyBuilder WithKeyStoreMinimumCapability(KeyStoreCapability capability)
     {
@@ -92,7 +103,7 @@ public sealed class SecurityPolicyBuilder
             _name, _arithmetic, _comparison, _stringOperations,
             _memory, _keyRotation, _audit, _taint, _maxDecryptionCount,
             _autoDestroy, _allowDemotion, _decryptionRateLimit, _keyStoreMinimumCapability,
-            _overflow);
+            _overflow, decryptionRateLimitWindow: _decryptionRateLimitWindow);
     }
 
     private void Validate()
