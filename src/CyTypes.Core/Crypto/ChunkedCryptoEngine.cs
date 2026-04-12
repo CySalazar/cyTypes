@@ -22,9 +22,11 @@ public sealed class ChunkedCryptoEngine : IStreamCryptoEngine, IDisposable
 
     private static readonly byte[] RatchetInfo = "CyTypes.KeyRatchet"u8.ToArray();
 
+    private const int MaxChunkSize = 16 * 1024 * 1024; // 16 MB
+
     private SecureBuffer _currentKey;
     private long _ratchetGeneration;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
 
     /// <inheritdoc/>
     public int ChunkSize { get; }
@@ -37,6 +39,8 @@ public sealed class ChunkedCryptoEngine : IStreamCryptoEngine, IDisposable
     public ChunkedCryptoEngine(ReadOnlySpan<byte> key, int chunkSize = 65536)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(chunkSize, 0);
+        if (chunkSize > MaxChunkSize)
+            throw new ArgumentOutOfRangeException(nameof(chunkSize), $"Chunk size must not exceed {MaxChunkSize} bytes (16 MB).");
         if (key.Length != 32)
             throw new ArgumentException("Key must be 256 bits (32 bytes).", nameof(key));
 
@@ -48,7 +52,9 @@ public sealed class ChunkedCryptoEngine : IStreamCryptoEngine, IDisposable
     /// <inheritdoc/>
     public byte[] EncryptChunk(ReadOnlySpan<byte> plaintext, long sequenceNumber, bool isFinal)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
+        if (sequenceNumber < 0)
+            throw new CryptographicException("Sequence number overflow: maximum chunk count exceeded.");
         RatchetKeyIfNeeded(sequenceNumber);
 
         var encodedSeq = isFinal ? (sequenceNumber | FinalChunkMarker) : sequenceNumber;
@@ -81,7 +87,7 @@ public sealed class ChunkedCryptoEngine : IStreamCryptoEngine, IDisposable
     /// <inheritdoc/>
     public byte[] DecryptChunk(ReadOnlySpan<byte> encryptedChunk, long expectedSequenceNumber, out bool isFinal)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         if (encryptedChunk.Length < ChunkOverhead)
             throw new CryptographicException("Encrypted chunk is too short.");
@@ -151,8 +157,7 @@ public sealed class ChunkedCryptoEngine : IStreamCryptoEngine, IDisposable
     /// <summary>Disposes the engine and zeros the key material.</summary>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
         _currentKey.Dispose();
     }
 }

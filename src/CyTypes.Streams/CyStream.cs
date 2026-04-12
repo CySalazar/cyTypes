@@ -34,17 +34,17 @@ public class CyStream : Stream, IAsyncDisposable
     private byte[]? _headerBytes;
     private SecureBuffer? _streamKey;
 
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
     private bool _isFlushedFinal;
 
     /// <inheritdoc/>
-    public override bool CanRead => !_isWriteMode && !_isDisposed;
+    public override bool CanRead => !_isWriteMode && Volatile.Read(ref _isDisposed) == 0;
 
     /// <inheritdoc/>
     public override bool CanSeek => false;
 
     /// <inheritdoc/>
-    public override bool CanWrite => _isWriteMode && !_isDisposed;
+    public override bool CanWrite => _isWriteMode && Volatile.Read(ref _isDisposed) == 0;
 
     /// <inheritdoc/>
     public override long Length => throw new NotSupportedException("CyStream does not support Length.");
@@ -138,7 +138,7 @@ public class CyStream : Stream, IAsyncDisposable
     /// <inheritdoc/>
     public override void Write(byte[] buffer, int offset, int count)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         if (!_isWriteMode)
             throw new NotSupportedException("Stream is not in write mode.");
         ArgumentNullException.ThrowIfNull(buffer);
@@ -171,7 +171,7 @@ public class CyStream : Stream, IAsyncDisposable
     /// <inheritdoc/>
     public override int Read(byte[] buffer, int offset, int count)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         if (_isWriteMode)
             throw new NotSupportedException("Stream is not in read mode.");
         ArgumentNullException.ThrowIfNull(buffer);
@@ -210,7 +210,7 @@ public class CyStream : Stream, IAsyncDisposable
     /// <inheritdoc/>
     public override void Flush()
     {
-        if (_isWriteMode && !_isDisposed)
+        if (_isWriteMode && Volatile.Read(ref _isDisposed) == 0)
             _innerStream.Flush();
     }
 
@@ -220,7 +220,7 @@ public class CyStream : Stream, IAsyncDisposable
     /// </summary>
     public void WriteFinal()
     {
-        if (_isFlushedFinal || !_isWriteMode || _isDisposed)
+        if (_isFlushedFinal || !_isWriteMode || Volatile.Read(ref _isDisposed) == 1)
             return;
 
         _isFlushedFinal = true;
@@ -282,8 +282,10 @@ public class CyStream : Stream, IAsyncDisposable
             return false;
 
         var chunkLength = BinaryPrimitives.ReadInt32BigEndian(lengthBuf);
-        if (chunkLength <= 0 || chunkLength > _engine.ChunkSize + 36 + 4)
-            return false; // Invalid or this might be the footer
+        if (chunkLength <= 0)
+            throw new CryptographicException($"Invalid chunk length: {chunkLength}. Stream may be corrupted or tampered.");
+        if (chunkLength > _engine.ChunkSize + ChunkedCryptoEngine.GetEncryptedChunkSize(0) + 4)
+            throw new CryptographicException($"Chunk length {chunkLength} exceeds maximum expected size. Stream may be corrupted or tampered.");
 
         var encryptedChunk = new byte[chunkLength];
         if (ReadExactly(_innerStream, encryptedChunk) < chunkLength)
@@ -331,15 +333,18 @@ public class CyStream : Stream, IAsyncDisposable
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (_isDisposed) return;
+        // WriteFinal has its own _isFlushedFinal guard; safe to call before CAS
+        if (disposing && _isWriteMode)
+            WriteFinal();
+
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0)
+        {
+            base.Dispose(disposing);
+            return;
+        }
 
         if (disposing)
         {
-            if (_isWriteMode)
-                WriteFinal();
-
-            _isDisposed = true;
-
             _writeBuffer?.Dispose();
             _readBuffer?.Dispose();
             _engine.Dispose();
@@ -354,10 +359,6 @@ public class CyStream : Stream, IAsyncDisposable
             if (!_leaveOpen)
                 _innerStream.Dispose();
         }
-        else
-        {
-            _isDisposed = true;
-        }
 
         base.Dispose(disposing);
     }
@@ -365,12 +366,10 @@ public class CyStream : Stream, IAsyncDisposable
     /// <inheritdoc/>
     public override async ValueTask DisposeAsync()
     {
-        if (_isDisposed) return;
-
         if (_isWriteMode)
             WriteFinal();
 
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _writeBuffer?.Dispose();
         _readBuffer?.Dispose();

@@ -18,7 +18,7 @@ public sealed class SessionKeyNegotiator : IDisposable
     private readonly MlKemKeyEncapsulation _mlKem;
     private byte[]? _mlKemPublicKey;
     private byte[]? _mlKemSecretKey;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
 
     /// <summary>Gets the ECDH P-256 public key bytes (SubjectPublicKeyInfo DER).</summary>
     public byte[] EcdhPublicKey { get; }
@@ -32,13 +32,21 @@ public sealed class SessionKeyNegotiator : IDisposable
     public SessionKeyNegotiator()
     {
         _ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
-        _mlKem = new MlKemKeyEncapsulation();
+        try
+        {
+            _mlKem = new MlKemKeyEncapsulation();
 
-        EcdhPublicKey = _ecdh.PublicKey.ExportSubjectPublicKeyInfo();
+            EcdhPublicKey = _ecdh.PublicKey.ExportSubjectPublicKeyInfo();
 
-        var (pub, sec) = _mlKem.GenerateKeyPair();
-        _mlKemPublicKey = pub;
-        _mlKemSecretKey = sec;
+            var (pub, sec) = _mlKem.GenerateKeyPair();
+            _mlKemPublicKey = pub;
+            _mlKemSecretKey = sec;
+        }
+        catch
+        {
+            _ecdh.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -46,7 +54,7 @@ public sealed class SessionKeyNegotiator : IDisposable
     /// </summary>
     public HandshakeMessage CreateHandshake()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         return new HandshakeMessage(EcdhPublicKey, MlKemPublicKey);
     }
 
@@ -58,7 +66,7 @@ public sealed class SessionKeyNegotiator : IDisposable
     /// <returns>The derived 32-byte session key and the ML-KEM ciphertext to send to the responder.</returns>
     public (SecureBuffer SessionKey, byte[] MlKemCiphertext) DeriveSessionKeyAsInitiator(HandshakeMessage responderHandshake)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         // ECDH P-256 shared secret
         using var peerEcdh = ECDiffieHellman.Create();
@@ -87,7 +95,7 @@ public sealed class SessionKeyNegotiator : IDisposable
     /// <returns>The derived 32-byte session key.</returns>
     public SecureBuffer DeriveSessionKeyAsResponder(HandshakeMessage initiatorHandshake, byte[] mlKemCiphertext)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         if (_mlKemSecretKey == null)
             throw new InvalidOperationException("ML-KEM secret key not available.");
@@ -113,28 +121,32 @@ public sealed class SessionKeyNegotiator : IDisposable
 
     private SecureBuffer DeriveSessionKey(byte[] ecdhShared, byte[] mlKemShared, HandshakeMessage peerHandshake)
     {
-        // Combine shared secrets
-        var combined = new byte[ecdhShared.Length + mlKemShared.Length];
-        ecdhShared.CopyTo(combined, 0);
-        mlKemShared.CopyTo(combined, ecdhShared.Length);
-
-        // Transcript hash uses canonical (sorted) key ordering so both sides produce the same hash.
-        // Sort: smaller ECDH key first, then smaller ML-KEM key first.
-        var (ecdhFirst, ecdhSecond) = OrderByContent(EcdhPublicKey, peerHandshake.EcdhPublicKey);
-        var (mlKemFirst, mlKemSecond) = OrderByContent(MlKemPublicKey, peerHandshake.MlKemPublicKey);
-
-        var transcript = new byte[ecdhFirst.Length + ecdhSecond.Length +
-                                  mlKemFirst.Length + mlKemSecond.Length];
-        var offset = 0;
-        ecdhFirst.CopyTo(transcript, offset); offset += ecdhFirst.Length;
-        ecdhSecond.CopyTo(transcript, offset); offset += ecdhSecond.Length;
-        mlKemFirst.CopyTo(transcript, offset); offset += mlKemFirst.Length;
-        mlKemSecond.CopyTo(transcript, offset);
-
-        var salt = SHA512.HashData(transcript);
-
+        // SECURITY: All intermediate buffers are zeroed in finally blocks to prevent leaks
+        byte[]? combined = null;
+        byte[]? transcript = null;
+        byte[]? salt = null;
         try
         {
+            // Combine shared secrets
+            combined = new byte[ecdhShared.Length + mlKemShared.Length];
+            ecdhShared.CopyTo(combined, 0);
+            mlKemShared.CopyTo(combined, ecdhShared.Length);
+
+            // Transcript hash uses canonical (sorted) key ordering so both sides produce the same hash.
+            // Sort: smaller ECDH key first, then smaller ML-KEM key first.
+            var (ecdhFirst, ecdhSecond) = OrderByContent(EcdhPublicKey, peerHandshake.EcdhPublicKey);
+            var (mlKemFirst, mlKemSecond) = OrderByContent(MlKemPublicKey, peerHandshake.MlKemPublicKey);
+
+            transcript = new byte[ecdhFirst.Length + ecdhSecond.Length +
+                                      mlKemFirst.Length + mlKemSecond.Length];
+            var offset = 0;
+            ecdhFirst.CopyTo(transcript, offset); offset += ecdhFirst.Length;
+            ecdhSecond.CopyTo(transcript, offset); offset += ecdhSecond.Length;
+            mlKemFirst.CopyTo(transcript, offset); offset += mlKemFirst.Length;
+            mlKemSecond.CopyTo(transcript, offset);
+
+            salt = SHA512.HashData(transcript);
+
             var keyBytes = HkdfKeyDerivation.DeriveKey(combined, outputLength: 32, salt: salt, info: SessionKeyInfo);
             var sessionKey = new SecureBuffer(32);
             sessionKey.Write(keyBytes);
@@ -143,9 +155,9 @@ public sealed class SessionKeyNegotiator : IDisposable
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(combined);
-            CryptographicOperations.ZeroMemory(transcript);
-            CryptographicOperations.ZeroMemory(salt);
+            if (combined != null) CryptographicOperations.ZeroMemory(combined);
+            if (transcript != null) CryptographicOperations.ZeroMemory(transcript);
+            if (salt != null) CryptographicOperations.ZeroMemory(salt);
         }
     }
 
@@ -158,8 +170,7 @@ public sealed class SessionKeyNegotiator : IDisposable
     /// <summary>Disposes the negotiator and zeros all key material.</summary>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         _ecdh.Dispose();
 
@@ -202,10 +213,17 @@ public sealed record HandshakeMessage(byte[] EcdhPublicKey, byte[] MlKemPublicKe
             throw new ArgumentException("Handshake data is too short.", nameof(data));
 
         var ecdhLen = BitConverter.ToInt32(data[..4]);
+        // SECURITY: Validate ECDH key length bounds (P-256 SubjectPublicKeyInfo is ~91 bytes)
+        if (ecdhLen < 32 || ecdhLen > 256)
+            throw new ArgumentException($"ECDH public key length {ecdhLen} is outside valid range [32, 256].", nameof(data));
         if (data.Length < 4 + ecdhLen)
             throw new ArgumentException("Handshake data is truncated.", nameof(data));
 
         var ecdhKey = data.Slice(4, ecdhLen).ToArray();
+        var mlKemKeyLen = data.Length - 4 - ecdhLen;
+        // SECURITY: Validate ML-KEM key length bounds (ML-KEM-768=1184, ML-KEM-1024=1568)
+        if (mlKemKeyLen < 1184 || mlKemKeyLen > 1700)
+            throw new ArgumentException($"ML-KEM public key length {mlKemKeyLen} is outside valid range [1184, 1700].", nameof(data));
         var mlKemKey = data[(4 + ecdhLen)..].ToArray();
 
         return new HandshakeMessage(ecdhKey, mlKemKey);

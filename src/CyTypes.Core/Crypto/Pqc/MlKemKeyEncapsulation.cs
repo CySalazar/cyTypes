@@ -19,7 +19,8 @@ public sealed class MlKemKeyEncapsulation : IPqcKeyEncapsulation
     /// <inheritdoc/>
     public (byte[] publicKey, byte[] secretKey) GenerateKeyPair()
     {
-        var random = new SecureRandom();
+        // SECURITY: Seed with CryptoApiRandomGenerator which uses the OS CSPRNG
+        var random = new SecureRandom(new Org.BouncyCastle.Security.CryptoApiRandomGenerator());
         var keyGenParams = new MLKemKeyGenerationParameters(random, Parameters);
         var keyGen = new MLKemKeyPairGenerator();
         keyGen.Init(keyGenParams);
@@ -59,6 +60,12 @@ public sealed class MlKemKeyEncapsulation : IPqcKeyEncapsulation
         var privKeyParams = (MLKemPrivateKeyParameters)PrivateKeyFactory.CreateKey(secretKey);
         var decapsulator = new MLKemDecapsulator(Parameters);
         decapsulator.Init(privKeyParams);
+
+        // SECURITY: Validate ciphertext length before attempting decapsulation
+        if (ciphertext.Length != decapsulator.EncapsulationLength)
+            throw new ArgumentException(
+                $"Invalid ML-KEM ciphertext size: {ciphertext.Length}. Expected {decapsulator.EncapsulationLength} bytes.",
+                nameof(ciphertext));
 
         var secBuf = new byte[decapsulator.SecretLength];
         decapsulator.Decapsulate(ciphertext, 0, ciphertext.Length, secBuf, 0, secBuf.Length);

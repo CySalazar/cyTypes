@@ -62,6 +62,11 @@ public sealed partial class RedactingLogger : ILogger
         // Redact base64-encoded blobs (48+ chars, potential ciphertext leaks)
         result = Base64PayloadPattern().Replace(result, RedactedPlaceholder);
 
+        // Redact common API key and token patterns
+        result = ApiKeyPattern().Replace(result, RedactedPlaceholder);
+        result = BearerTokenPattern().Replace(result, RedactedPlaceholder);
+        result = ConnectionStringSecretPattern().Replace(result, RedactedPlaceholder);
+
         return result;
     }
 
@@ -79,6 +84,24 @@ public sealed partial class RedactingLogger : ILogger
         @"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{48,2048}={0,2}(?![A-Za-z0-9+/=])",
         System.Text.RegularExpressions.RegexOptions.Compiled)]
     private static partial System.Text.RegularExpressions.Regex Base64PayloadPattern();
+
+    // Common API key formats: sk-ant-*, sk-or-*, sk-*, AIza*
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"(?:sk-ant-|sk-or-|sk-|AIza)[A-Za-z0-9_\-]{20,}",
+        System.Text.RegularExpressions.RegexOptions.Compiled)]
+    private static partial System.Text.RegularExpressions.Regex ApiKeyPattern();
+
+    // Bearer tokens in log messages
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"Bearer\s+[A-Za-z0-9._~+/\-]{20,}={0,2}",
+        System.Text.RegularExpressions.RegexOptions.Compiled)]
+    private static partial System.Text.RegularExpressions.Regex BearerTokenPattern();
+
+    // Connection string secrets: password=..., pwd=..., secret=..., token=...
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"(?:password|pwd|secret|token)\s*=\s*[^\s;]{3,}",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ConnectionStringSecretPattern();
 }
 
 /// <summary>

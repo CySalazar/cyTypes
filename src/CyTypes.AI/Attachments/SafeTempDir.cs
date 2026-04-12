@@ -31,6 +31,9 @@ public sealed class SafeTempDir : IDisposable
         return System.IO.Path.Combine(Path, "f" + suffix);
     }
 
+    /// <summary>Optional debug-level log callback for dispose failures.</summary>
+    internal static Action<string>? DebugLog { get; set; }
+
     public void Dispose()
     {
         try
@@ -38,9 +41,10 @@ public sealed class SafeTempDir : IDisposable
             if (Directory.Exists(Path))
                 Directory.Delete(Path, recursive: true);
         }
-        catch
+        catch (Exception ex)
         {
-            // best-effort cleanup; ignore errors during dispose
+            // best-effort cleanup; log for diagnostics if callback is set
+            DebugLog?.Invoke($"SafeTempDir cleanup failed for '{Path}': {ex.Message}");
         }
     }
 }

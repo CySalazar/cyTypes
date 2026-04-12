@@ -12,7 +12,7 @@ public sealed class CyStreamWriter : IDisposable
 {
     private readonly CyStream _stream;
     private readonly bool _leaveOpen;
-    private bool _isDisposed;
+    private int _isDisposed; // 0 = alive, 1 = disposed (atomic via Interlocked)
 
     /// <summary>
     /// Initializes a new <see cref="CyStreamWriter"/> that writes to the given <see cref="CyStream"/>.
@@ -34,7 +34,7 @@ public sealed class CyStreamWriter : IDisposable
     public void WriteValue<TSelf, TNative>(CyTypeBase<TSelf, TNative> value)
         where TSelf : CyTypeBase<TSelf, TNative>
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         ArgumentNullException.ThrowIfNull(value);
 
         var typeId = CyTypeIds.GetTypeId<TSelf>();
@@ -56,7 +56,7 @@ public sealed class CyStreamWriter : IDisposable
     /// <param name="encryptedPayload">The encrypted payload bytes.</param>
     public void WriteRaw(ushort typeId, ReadOnlySpan<byte> encryptedPayload)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
 
         Span<byte> header = stackalloc byte[6];
         BinaryPrimitives.WriteUInt16BigEndian(header[..2], typeId);
@@ -69,15 +69,14 @@ public sealed class CyStreamWriter : IDisposable
     /// <summary>Finalizes the stream writing.</summary>
     public void Complete()
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         _stream.WriteFinal();
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0) return;
 
         if (!_leaveOpen)
             _stream.Dispose();
