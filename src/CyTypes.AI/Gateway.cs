@@ -255,6 +255,11 @@ public sealed class CyAIOptions
     internal readonly List<ICompliancePlugin> Plugins = new();
     public TokenBudgetManager? Budget { get; set; }
     public ModelRegistry? Registry { get; set; }
+    /// <summary>
+    /// When false (default), medical terms are detected but not tokenized.
+    /// Set to true to tokenize disease/condition names alongside person identifiers.
+    /// </summary>
+    public bool TokenizeMedicalTerms { get; set; }
 
     public CyAIOptions WithGdpr() { Plugins.Add(new GdprPlugin()); return this; }
     public CyAIOptions WithNis2() { Plugins.Add(new Nis2Plugin()); return this; }
@@ -376,7 +381,10 @@ public sealed class CyAI
         string? tokenizedSystem = null;
         if (sanitizedSystem != null && systemCls != null)
         {
-            var sTok = tokenizer.Tokenize(sanitizedSystem, systemCls.Findings);
+            var sFindings = _o.TokenizeMedicalTerms
+                ? systemCls.Findings
+                : systemCls.Findings.Where(f => f.DataClass != DataClass.MedicalTerm);
+            var sTok = tokenizer.Tokenize(sanitizedSystem, sFindings);
             tokenizedSystem = sTok.TokenizedText;
             totalTokenizedCount += sTok.TokenCount;
         }
@@ -384,7 +392,10 @@ public sealed class CyAI
         var tokenizedTurns = new List<ChatMessage>(classifiedTurns.Count);
         foreach (var t in classifiedTurns)
         {
-            var tok = tokenizer.Tokenize(t.sanitized, t.cls.Findings);
+            var findings = _o.TokenizeMedicalTerms
+                ? t.cls.Findings
+                : t.cls.Findings.Where(f => f.DataClass != DataClass.MedicalTerm);
+            var tok = tokenizer.Tokenize(t.sanitized, findings);
             totalTokenizedCount += tok.TokenCount;
             tokenizedTurns.Add(new ChatMessage(t.role, tok.TokenizedText));
         }

@@ -73,7 +73,7 @@ public sealed class HipaaPlugin : CompliancePluginBase
     public override string Name => "US HIPAA";
     protected override void BuildRules()
     {
-        Rule(DataClass.MedicalTerm, DataAction.Tokenize, Severity.High, "PHI");
+        Rule(DataClass.MedicalTerm, DataAction.Allow, Severity.Info, "Medical term (not an identifier)");
         Rule(DataClass.HealthRecord, DataAction.Block, Severity.Critical, "PHI");
         Rule(DataClass.DateOfBirth, DataAction.Tokenize, Severity.High, "PHI identifier");
     }
