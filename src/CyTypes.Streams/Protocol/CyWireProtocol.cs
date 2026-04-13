@@ -139,7 +139,7 @@ public static class CyWireProtocol
     }
 
     /// <summary>Writes an authenticated frame: header + payload + HMAC-SHA256 over (header || payload).</summary>
-    public static async Task WriteAuthenticatedFrameAsync(
+    public static Task WriteAuthenticatedFrameAsync(
         Stream stream, FrameType type, ReadOnlyMemory<byte> payload,
         ReadOnlySpan<byte> hmacKey, FrameFlags flags = FrameFlags.None,
         CancellationToken ct = default)
@@ -150,68 +150,89 @@ public static class CyWireProtocol
         header[1] = (byte)flags;
         BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(2), payload.Length);
 
-        // Compute HMAC-SHA256 over header || payload
+        // Compute HMAC-SHA256 synchronously (before entering async state machine) so we can use Span
         var authData = new byte[FrameHeaderSize + payload.Length];
         header.CopyTo(authData, 0);
         payload.Span.CopyTo(authData.AsSpan(FrameHeaderSize));
         var hmac = HMACSHA256.HashData(hmacKey, authData);
+        CryptographicOperations.ZeroMemory(authData);
 
+        return WriteAuthenticatedFrameCoreAsync(stream, header, payload, hmac, ct);
+    }
+
+    private static async Task WriteAuthenticatedFrameCoreAsync(
+        Stream stream, byte[] header, ReadOnlyMemory<byte> payload, byte[] hmac,
+        CancellationToken ct)
+    {
         await stream.WriteAsync(header, ct).ConfigureAwait(false);
         if (payload.Length > 0)
             await stream.WriteAsync(payload, ct).ConfigureAwait(false);
         await stream.WriteAsync(hmac, ct).ConfigureAwait(false);
         await stream.FlushAsync(ct).ConfigureAwait(false);
-
-        CryptographicOperations.ZeroMemory(authData);
     }
 
     /// <summary>Reads a frame and verifies HMAC-SHA256 if the Authenticated flag is set.</summary>
-    public static async Task<Frame?> ReadAuthenticatedFrameAsync(
+    public static Task<Frame?> ReadAuthenticatedFrameAsync(
         Stream stream, ReadOnlySpan<byte> hmacKey, CancellationToken ct = default)
     {
-        var header = new byte[FrameHeaderSize];
-        var read = await ReadExactlyAsync(stream, header, ct).ConfigureAwait(false);
-        if (read == 0) return null;
-        if (read < FrameHeaderSize)
-            throw new InvalidDataException("Incomplete frame header.");
+        // Copy the key before entering the async state machine (Span cannot cross awaits in .NET 8)
+        var keyCopy = hmacKey.ToArray();
+        return ReadAuthenticatedFrameCoreAsync(stream, keyCopy, ct);
+    }
 
-        var type = (FrameType)header[0];
-        if (!Enum.IsDefined(type))
-            throw new InvalidDataException($"Unknown frame type: 0x{header[0]:X2}.");
-        var flags = (FrameFlags)header[1];
-        var payloadLength = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(2));
-
-        if (payloadLength < 0 || payloadLength > MaxPayloadSize)
-            throw new InvalidDataException($"Invalid payload length: {payloadLength}.");
-
-        var payload = payloadLength > 0 ? new byte[payloadLength] : Array.Empty<byte>();
-        if (payloadLength > 0)
+    private static async Task<Frame?> ReadAuthenticatedFrameCoreAsync(
+        Stream stream, byte[] hmacKey, CancellationToken ct)
+    {
+        try
         {
-            var payloadRead = await ReadExactlyAsync(stream, payload, ct).ConfigureAwait(false);
-            if (payloadRead < payloadLength)
-                throw new InvalidDataException("Incomplete frame payload.");
-        }
+            var header = new byte[FrameHeaderSize];
+            var read = await ReadExactlyAsync(stream, header, ct).ConfigureAwait(false);
+            if (read == 0) return null;
+            if (read < FrameHeaderSize)
+                throw new InvalidDataException("Incomplete frame header.");
 
-        if ((flags & FrameFlags.Authenticated) != 0)
-        {
-            var receivedHmac = new byte[HmacSize];
-            var hmacRead = await ReadExactlyAsync(stream, receivedHmac, ct).ConfigureAwait(false);
-            if (hmacRead < HmacSize)
-                throw new InvalidDataException("Incomplete frame HMAC.");
+            var type = (FrameType)header[0];
+            if (!Enum.IsDefined(type))
+                throw new InvalidDataException($"Unknown frame type: 0x{header[0]:X2}.");
+            var flags = (FrameFlags)header[1];
+            var payloadLength = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(2));
 
-            var authData = new byte[FrameHeaderSize + payloadLength];
-            header.CopyTo(authData, 0);
+            if (payloadLength < 0 || payloadLength > MaxPayloadSize)
+                throw new InvalidDataException($"Invalid payload length: {payloadLength}.");
+
+            var payload = payloadLength > 0 ? new byte[payloadLength] : Array.Empty<byte>();
             if (payloadLength > 0)
-                payload.CopyTo(authData, FrameHeaderSize);
+            {
+                var payloadRead = await ReadExactlyAsync(stream, payload, ct).ConfigureAwait(false);
+                if (payloadRead < payloadLength)
+                    throw new InvalidDataException("Incomplete frame payload.");
+            }
 
-            var expectedHmac = HMACSHA256.HashData(hmacKey, authData);
-            if (!CryptographicOperations.FixedTimeEquals(receivedHmac, expectedHmac))
-                throw new CryptographicException("Frame HMAC verification failed. The frame may have been tampered with.");
+            if ((flags & FrameFlags.Authenticated) != 0)
+            {
+                var receivedHmac = new byte[HmacSize];
+                var hmacRead = await ReadExactlyAsync(stream, receivedHmac, ct).ConfigureAwait(false);
+                if (hmacRead < HmacSize)
+                    throw new InvalidDataException("Incomplete frame HMAC.");
 
-            CryptographicOperations.ZeroMemory(authData);
+                var authData = new byte[FrameHeaderSize + payloadLength];
+                header.CopyTo(authData, 0);
+                if (payloadLength > 0)
+                    payload.CopyTo(authData, FrameHeaderSize);
+
+                var expectedHmac = HMACSHA256.HashData(hmacKey, authData);
+                if (!CryptographicOperations.FixedTimeEquals(receivedHmac, expectedHmac))
+                    throw new CryptographicException("Frame HMAC verification failed. The frame may have been tampered with.");
+
+                CryptographicOperations.ZeroMemory(authData);
+            }
+
+            return new Frame(type, flags, payload);
         }
-
-        return new Frame(type, flags, payload);
+        finally
+        {
+            CryptographicOperations.ZeroMemory(hmacKey);
+        }
     }
 
     private static async Task<int> ReadExactlyAsync(Stream stream, Memory<byte> buffer, CancellationToken ct)

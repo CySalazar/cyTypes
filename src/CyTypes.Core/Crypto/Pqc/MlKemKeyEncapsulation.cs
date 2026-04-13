@@ -19,8 +19,8 @@ public sealed class MlKemKeyEncapsulation : IPqcKeyEncapsulation
     /// <inheritdoc/>
     public (byte[] publicKey, byte[] secretKey) GenerateKeyPair()
     {
-        // SECURITY: Seed with CryptoApiRandomGenerator which uses the OS CSPRNG
-        var random = new SecureRandom(new Org.BouncyCastle.Security.CryptoApiRandomGenerator());
+        // SECURITY: SecureRandom uses the OS CSPRNG by default in BouncyCastle 2.6+
+        var random = new SecureRandom();
         var keyGenParams = new MLKemKeyGenerationParameters(random, Parameters);
         var keyGen = new MLKemKeyPairGenerator();
         keyGen.Init(keyGenParams);
