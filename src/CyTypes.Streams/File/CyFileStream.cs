@@ -130,9 +130,16 @@ public sealed class CyFileStream : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
         var tempBuf = new byte[buffer.Length];
-        var read = _cyStream.Read(tempBuf, 0, tempBuf.Length);
-        tempBuf.AsSpan(0, read).CopyTo(buffer);
-        return read;
+        try
+        {
+            var read = _cyStream.Read(tempBuf, 0, tempBuf.Length);
+            tempBuf.AsSpan(0, read).CopyTo(buffer);
+            return read;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(tempBuf);
+        }
     }
 
     private static SecureBuffer DeriveKeyFromPassphrase(string passphrase, Guid salt)

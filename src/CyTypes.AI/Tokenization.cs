@@ -21,6 +21,7 @@ public sealed class PiiTokenizer : IDisposable
     private readonly Dictionary<string, string> _valueToToken = new();
     private readonly Dictionary<string, string> _tokenToValue = new();
     private readonly List<string> _audit = new();
+    private readonly object _lock = new();
 
     public PiiTokenizer(string sessionId) { SessionId = sessionId; }
 
@@ -29,33 +30,42 @@ public sealed class PiiTokenizer : IDisposable
         var sorted = findings.OrderByDescending(f => f.Start).ToList();
         var sb = new StringBuilder(text);
         int count = 0;
-        foreach (var f in sorted)
+        lock (_lock)
         {
-            if (f.Start < 0 || f.Start + f.Length > sb.Length) continue;
-            var token = GetOrCreateToken(f);
-            sb.Remove(f.Start, f.Length);
-            sb.Insert(f.Start, token);
-            count++;
-            _audit.Add($"{DateTime.UtcNow:O}|tokenize|{f.DataClass}|{Sha256(f.Value)}");
+            foreach (var f in sorted)
+            {
+                if (f.Start < 0 || f.Start + f.Length > sb.Length) continue;
+                var token = GetOrCreateToken(f);
+                sb.Remove(f.Start, f.Length);
+                sb.Insert(f.Start, token);
+                count++;
+                _audit.Add($"{DateTime.UtcNow:O}|tokenize|{f.DataClass}|{Sha256(f.Value)}");
+            }
+            return new TokenizationResult
+            {
+                TokenizedText = sb.ToString(),
+                TokenCount = count,
+                TokenMap = new Dictionary<string, string>(_tokenToValue)
+            };
         }
-        return new TokenizationResult
-        {
-            TokenizedText = sb.ToString(),
-            TokenCount = count,
-            TokenMap = new Dictionary<string, string>(_tokenToValue)
-        };
     }
 
     public string Detokenize(string tokenizedText)
     {
-        var sb = new StringBuilder(tokenizedText);
-        foreach (var (token, value) in _tokenToValue)
-            sb.Replace(token, value);
-        _audit.Add($"{DateTime.UtcNow:O}|detokenize|{_tokenToValue.Count}");
-        return sb.ToString();
+        lock (_lock)
+        {
+            var sb = new StringBuilder(tokenizedText);
+            foreach (var (token, value) in _tokenToValue)
+                sb.Replace(token, value);
+            _audit.Add($"{DateTime.UtcNow:O}|detokenize|{_tokenToValue.Count}");
+            return sb.ToString();
+        }
     }
 
-    public IReadOnlyList<string> GetAuditTrail() => _audit;
+    public IReadOnlyList<string> GetAuditTrail()
+    {
+        lock (_lock) { return _audit.ToList(); }
+    }
 
     private string GetOrCreateToken(Finding f)
     {
@@ -125,7 +135,10 @@ public sealed class PiiTokenizer : IDisposable
 
     public void Dispose()
     {
-        _valueToToken.Clear();
-        _tokenToValue.Clear();
+        lock (_lock)
+        {
+            _valueToToken.Clear();
+            _tokenToValue.Clear();
+        }
     }
 }

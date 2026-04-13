@@ -28,6 +28,13 @@ public static class HmacComparer
     public static bool Verify(ReadOnlySpan<byte> key, ReadOnlySpan<byte> data, ReadOnlySpan<byte> expectedMac)
     {
         var actual = Compute(key, data);
-        return CryptographicOperations.FixedTimeEquals(actual, expectedMac);
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(actual, expectedMac);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(actual);
+        }
     }
 }

@@ -20,7 +20,11 @@ public abstract class ArchiveExtractorBase : ExtractorBase
     /// <summary>Maximum decompressed size in bytes per entry. Defaults to 100 MB.</summary>
     public long MaxBytesPerEntry { get; set; } = 100L * 1024 * 1024;
 
+    /// <summary>Maximum aggregate decompressed bytes across all entries in an archive (including nested). Defaults to 500 MB.</summary>
+    public long MaxTotalBytes { get; set; } = 500L * 1024 * 1024;
+
     private static readonly AsyncLocal<int> _currentDepth = new();
+    private static readonly AsyncLocal<long> _totalBytesDecompressed = new();
 
     protected abstract IEnumerable<(string entryName, Stream entryStream)> EnumerateEntries(Stream stream);
 
@@ -29,6 +33,8 @@ public abstract class ArchiveExtractorBase : ExtractorBase
         if (_currentDepth.Value >= MaxDepth)
             return $"[archive recursion depth limit reached: {MaxDepth}]";
 
+        bool isRoot = _currentDepth.Value == 0;
+        if (isRoot) _totalBytesDecompressed.Value = 0;
         _currentDepth.Value++;
         try
         {
@@ -56,6 +62,14 @@ public abstract class ArchiveExtractorBase : ExtractorBase
                 // Per-entry size cap: copy at most MaxBytesPerEntry bytes from
                 // the entry stream. This protects against a single 10 GB entry
                 // exploding the buffer in memory ("zip bomb" with N=1).
+                // Check aggregate limit before starting a new entry
+                if (_totalBytesDecompressed.Value >= MaxTotalBytes)
+                {
+                    entryStream.Dispose();
+                    sb.AppendLine($"[aggregate decompression limit reached: {MaxTotalBytes} bytes]");
+                    break;
+                }
+
                 using var ms = new MemoryStream();
                 bool truncated = false;
                 try
@@ -64,15 +78,19 @@ public abstract class ArchiveExtractorBase : ExtractorBase
                     int read;
                     while ((read = entryStream.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        if (ms.Length + read > MaxBytesPerEntry)
+                        if (ms.Length + read > MaxBytesPerEntry ||
+                            _totalBytesDecompressed.Value + ms.Length + read > MaxTotalBytes)
                         {
-                            int allowed = (int)(MaxBytesPerEntry - ms.Length);
+                            long perEntryRoom = MaxBytesPerEntry - ms.Length;
+                            long totalRoom = MaxTotalBytes - _totalBytesDecompressed.Value - ms.Length;
+                            int allowed = (int)Math.Max(0, Math.Min(Math.Min(perEntryRoom, totalRoom), read));
                             if (allowed > 0) ms.Write(buffer, 0, allowed);
                             truncated = true;
                             break;
                         }
                         ms.Write(buffer, 0, read);
                     }
+                    _totalBytesDecompressed.Value += ms.Length;
                     ms.Position = 0;
                 }
                 finally { entryStream.Dispose(); }
