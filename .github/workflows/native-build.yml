@@ -1,0 +1,98 @@
+name: Native AOT Build
+
+on:
+  push:
+    tags:
+      - 'native-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+            artifact: libcytypes.so
+          - rid: linux-arm64
+            os: ubuntu-latest
+            artifact: libcytypes.so
+          - rid: win-x64
+            os: windows-latest
+            artifact: cytypes.dll
+          - rid: osx-x64
+            os: macos-latest
+            artifact: libcytypes.dylib
+          - rid: osx-arm64
+            os: macos-latest
+            artifact: libcytypes.dylib
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.rid == 'linux-arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Publish Native AOT
+        run: |
+          dotnet publish src/CyTypes.NativeExport/CyTypes.NativeExport.csproj \
+            -r ${{ matrix.rid }} \
+            -c Release \
+            -o native-out/
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: |
+            native-out/${{ matrix.artifact }}
+            src/CyTypes.NativeExport/cytypes.h
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Package artifacts
+        run: |
+          for dir in artifacts/native-*; do
+            rid="${dir#artifacts/native-}"
+            tar czf "cytypes-${rid}.tar.gz" -C "$dir" .
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: cytypes-*.tar.gz
+          body: |
+            ## CyTypes Native Library
+
+            Pre-built shared libraries for cross-language FFI integration.
+            Include `cytypes.h` in your project and link against the appropriate library.
+
+            ### Supported platforms
+            - Linux x64 (`libcytypes.so`)
+            - Linux ARM64 (`libcytypes.so`)
+            - Windows x64 (`cytypes.dll`)
+            - macOS x64 (`libcytypes.dylib`)
+            - macOS ARM64 (`libcytypes.dylib`)

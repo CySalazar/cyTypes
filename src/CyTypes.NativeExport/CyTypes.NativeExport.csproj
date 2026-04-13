@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Native AOT requires a single target framework -->
+    <TargetFramework>net9.0</TargetFramework>
+    <TargetFrameworks>net9.0</TargetFrameworks>
+
+    <!-- Native AOT output: shared library (.so / .dll / .dylib) -->
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <!-- No entry point — this is a shared library, not an executable -->
+    <OutputType>Library</OutputType>
+
+    <!-- Optimize for size (shared library consumers care about footprint) -->
+    <OptimizationPreference>Size</OptimizationPreference>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+    <DebuggerSupport>false</DebuggerSupport>
+
+    <!-- Suppress AOT warnings for interop patterns we handle explicitly -->
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+
+    <RootNamespace>CyTypes.NativeExport</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>cytypes</AssemblyName>
+
+    <!-- NuGet metadata -->
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IsPackable>false</IsPackable>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CyTypes.Core\CyTypes.Core.csproj" />
+    <ProjectReference Include="..\CyTypes.Primitives\CyTypes.Primitives.csproj" />
+    <ProjectReference Include="..\CyTypes.Collections\CyTypes.Collections.csproj" />
+  </ItemGroup>
+
+</Project>
