@@ -37,6 +37,17 @@ public sealed class GlinerClassifier : ILocalClassifier, IDisposable
         ("national identification number",  DataClass.NationalId,        0.50f),
         ("medical condition",               DataClass.MedicalTerm,       0.50f),
         ("medication",                      DataClass.MedicalTerm,       0.50f),
+        // HealthRecord: formal health records / diagnoses — GDPR Art.9 +
+        // HIPAA PHI. Separate label from MedicalTerm so plugin rules can
+        // treat diagnoses differently from mere terminology mentions.
+        ("medical diagnosis or health record", DataClass.HealthRecord,   0.55f),
+        // DateOfBirth: HIPAA PHI identifier + GDPR personal data.
+        ("date of birth",                   DataClass.DateOfBirth,       0.55f),
+        // Geolocation: GPS coordinates / location phrasing (CCPA + GDPR).
+        ("geographic coordinates or gps location", DataClass.Geolocation, 0.55f),
+        // ChildData: zero-shot detection of phrasing about minors under 13
+        // (COPPA). Higher threshold because the label is inherently vague.
+        ("information about a minor child", DataClass.ChildData,         0.60f),
         ("financial account",               DataClass.FinancialAccount,  0.50f),
         ("political opinion",               DataClass.PoliticalOpinion,  0.50f),
         ("sexual orientation",              DataClass.SexualOrientation, 0.50f),

@@ -166,7 +166,7 @@ public sealed class DataClassifier
     private static readonly (DataClass cls, Regex rx)[] _patterns =
     {
         (DataClass.Email,        new Regex(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", RegexOptions.Compiled)),
-        (DataClass.Iban,         new Regex(@"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b", RegexOptions.Compiled)),
+        (DataClass.Iban,         new Regex(@"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
         (DataClass.CreditCard,   new Regex(@"\b(?:\d[ -]*?){13,19}\b", RegexOptions.Compiled)),
         (DataClass.IpAddress,    new Regex(@"\b(?:\d{1,3}\.){3}\d{1,3}\b", RegexOptions.Compiled)),
         (DataClass.Url,          new Regex(@"https?://[^\s""'<>]+", RegexOptions.Compiled)),
@@ -175,7 +175,7 @@ public sealed class DataClassifier
         // matching inside longer digit runs (IBAN, PAN). Final 7-15 digit guard in
         // BuiltInRegex enforces E.164-ish length limits.
         (DataClass.Phone,        new Regex(@"(?<![\d.])(?:\+\d{1,3}[ .-]?)?(?:\(\d{1,4}\)[ .-]?|\d{2,4}[ .-]?){1,4}\d{3,9}(?![\d.])", RegexOptions.Compiled)),
-        (DataClass.FiscalCode,   new Regex(@"\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b", RegexOptions.Compiled)),
+        (DataClass.FiscalCode,   new Regex(@"\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
         (DataClass.Ssn,          new Regex(@"\b\d{3}-\d{2}-\d{4}\b", RegexOptions.Compiled)),
         // Stripe live/test keys + generic api/secret prefixed keys
         (DataClass.ApiKey,       new Regex(@"\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b", RegexOptions.Compiled)),
@@ -189,6 +189,10 @@ public sealed class DataClassifier
         // Captures from a password-keyword up to whitespace / quote / line end.
         // Won't match bare passwords without context (impossible without semantics).
         (DataClass.Password, new Regex(@"(?:password|passwd|pwd|passw[o0]rd|contrase[ñn]a|mot\s*de\s*passe|kennwort|senha)(?:\s*temporanea)?\s*[:=]?\s*['""]?(?<v>[^\s'""<>;]{6,64})", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+        // Geolocation: decimal-degree coordinate pair. Requires 3+ decimal
+        // places on both lat and lon so "1.5, 2.3" or "pi=3.14, e=2.71" do
+        // not match. Separator is `,` with optional whitespace.
+        (DataClass.Geolocation, new Regex(@"\b-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}\b", RegexOptions.Compiled)),
     };
 
     private static IEnumerable<Finding> BuiltInRegex(string text)
